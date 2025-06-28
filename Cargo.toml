@@ -9,7 +9,7 @@ name = "sharp"
 path = "src/lib.rs"
 
 [dependencies]
-libvips = {path ="../libvips-rust-bindings"}
+libvips = { git = "https://github.com/mrdkprj/libvips-rs-msvc.git" }
 num-traits = "0.2"
 num-derive = "0.4"
 strum = "0.27"
