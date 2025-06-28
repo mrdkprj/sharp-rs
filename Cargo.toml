@@ -1,0 +1,32 @@
+[package]
+name = "sharp"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "sharp"
+path = "src/lib.rs"
+
+[dependencies]
+libvips = {path ="../libvips-rust-bindings"}
+num-traits = "0.2"
+num-derive = "0.4"
+strum = "0.27"
+strum_macros = "0.27"
+async-std = "1.13.1"
+
+#[dev-dependencies]
+#tokio = { version = "1.45.1", features = ["full"] }
+
+[profile.release]
+opt-level = "s"
+debug = false
+strip = "none"
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = 'unwind'
+incremental = false
+codegen-units = 1
+rpath = false

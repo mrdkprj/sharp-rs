@@ -1,0 +1,1 @@
+# Nodejs Sharp for Rust
