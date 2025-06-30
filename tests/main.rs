@@ -156,6 +156,20 @@ fn metadata() {
     .unwrap();
     println!("{:?}", data);
 }
+
+#[test]
+fn icon() {
+    Sharp::new_from_file_with_opts(
+        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.png"),
+        SharpOptions {
+            fail_on: Some(FailOn::None),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .to_icon(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.ico"))
+    .unwrap();
+}
 /*
  * @example
  * // Join four input images as a 2x2 grid with a 4 pixel gutter

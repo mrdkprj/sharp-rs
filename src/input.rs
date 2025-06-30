@@ -432,6 +432,7 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
     } else {
         // From filesystem
         let image_type = determine_image_type_from_str(&descriptor.file);
+
         if image_type == ImageType::MISSING {
             if descriptor.file.contains("<svg") {
                 let msg = format!("Input file is missing, did you mean Buffer.from('{:?}')", descriptor.file[0..8].to_string());

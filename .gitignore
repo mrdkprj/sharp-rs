@@ -2,3 +2,4 @@
 /tests/img/*
 !tests/img/img.jpg
 !tests/img/sample.gif
+!tests/img/icon.png

@@ -18,6 +18,7 @@ use operation::{ExtendOptions, Fit, Region, ResizeOptions, TrimOptions};
 use std::{collections::HashMap, path::Path};
 
 mod common;
+mod icon;
 pub mod input;
 mod metadata;
 mod operation;
@@ -465,6 +466,31 @@ impl Sharp {
         })
     }
 
+    pub fn new_from_files<P: AsRef<Path>>(files: &[P]) -> Result<Self, String> {
+        Self::new_sharp_from_files(files, None)
+    }
+
+    pub fn new_from_files_with_opts<P: AsRef<Path>>(files: &[P], options: SharpOptions) -> Result<Self, String> {
+        Self::new_sharp_from_files(files, Some(options))
+    }
+
+    fn new_sharp_from_files<P: AsRef<Path>>(files: &[P], options: Option<SharpOptions>) -> Result<Self, String> {
+        if files.len() <= 1 {
+            return Err("Expected at least two images to join".to_string());
+        }
+
+        let app = VipsApp::new("sharp-rs", false).map_err(|e| e.to_string())?;
+        let mut all_options = init_options();
+        // Join images together
+        let join: Result<Vec<InputDescriptor>, String> = files.iter().map(|file| create_input_descriptor(Input::Path(file.as_ref().to_string_lossy().to_string()), options.clone())).collect();
+        all_options.join = join?;
+
+        Ok(Self {
+            app,
+            options: all_options,
+        })
+    }
+
     pub fn new_from_buffer(buffer: Vec<u8>) -> Result<Self, String> {
         Self::new_sharp_from_buffer(buffer, None)
     }
@@ -494,7 +520,7 @@ impl Sharp {
 
     fn new_sharp_from_buffers(buffers: Vec<Vec<u8>>, options: Option<SharpOptions>) -> Result<Self, String> {
         if buffers.len() <= 1 {
-            panic!("Expected at least two images to join");
+            return Err("Expected at least two images to join".to_string());
         }
 
         let app = VipsApp::new("sharp-rs", false).map_err(|e| e.to_string())?;
