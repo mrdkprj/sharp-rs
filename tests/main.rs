@@ -170,6 +170,12 @@ fn icon() {
     .to_icon(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.ico"))
     .unwrap();
 }
+
+#[test]
+fn icon_meta() {
+    let x = Sharp::from_icon_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.ico")).unwrap().metadata().unwrap();
+    println!("icon:{:?}", x);
+}
 /*
  * @example
  * // Join four input images as a 2x2 grid with a 4 pixel gutter
