@@ -10,12 +10,13 @@ use libvips::{
     },
     Result,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     ffi::{c_char, c_void, CStr, CString},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     pub format: String,
     pub width: i32,
