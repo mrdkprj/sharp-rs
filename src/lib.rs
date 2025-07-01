@@ -5,13 +5,8 @@ use crate::{
 };
 use common::{rgba_from_hex, Canvas, InputDescriptor};
 use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
-pub use libvips::ops::{Access, Extend, FailOn, Kernel, Precision, TextWrap};
-use libvips::{
-    ops::{
-        BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset, OperationBoolean,
-    },
-    VipsApp,
-};
+pub use libvips::ops::*;
+use libvips::VipsApp;
 use metadata::get_metadata;
 use num_derive::{FromPrimitive, ToPrimitive};
 use operation::{ExtendOptions, Fit, Region, ResizeOptions, TrimOptions};
