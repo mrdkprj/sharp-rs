@@ -5,7 +5,9 @@ use crate::{
 };
 use common::{rgba_from_hex, Canvas, InputDescriptor};
 use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
-pub use libvips::ops::*;
+pub use libvips::ops::{
+    BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset, OperationBoolean,
+};
 use libvips::VipsApp;
 use metadata::get_metadata;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -15,8 +17,8 @@ use std::{collections::HashMap, path::Path};
 mod common;
 mod icon;
 pub mod input;
-mod metadata;
-mod operation;
+pub mod metadata;
+pub mod operation;
 mod pipeline;
 
 macro_rules! InvalidParameterError {
