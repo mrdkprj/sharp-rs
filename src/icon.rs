@@ -2,7 +2,9 @@
 #![allow(clippy::collapsible_else_if)]
 
 use crate::{
+    common::Canvas,
     input::{CreateRaw, SharpOptions},
+    metadata::get_metadata,
     pipeline::{self, PipelineBaton, PipelineResult},
     Sharp,
 };
@@ -13,7 +15,8 @@ impl Sharp {
         let mut buffers = Vec::new();
 
         if self.options.join.is_empty() {
-            let result = to_png_buffer(self.options).unwrap();
+            let width = self.metadata()?.width;
+            let result = to_png_buffer(width, self.options).unwrap();
             self.options = result.baton;
             buffers.push(result.buffer);
         } else {
@@ -22,7 +25,8 @@ impl Sharp {
                 let mut options = self.options.clone();
                 options.join = Vec::new();
                 options.input = inp.clone();
-                let result = to_png_buffer(options).unwrap();
+                let width = get_metadata(&options.input).map_err(|e| e.to_string())?.width;
+                let result = to_png_buffer(width, options).unwrap();
                 final_option = result.baton;
                 buffers.push(result.buffer);
             }
@@ -108,9 +112,19 @@ struct IconEntry {
     image_type: String,
 }
 
-fn to_png_buffer(mut options: PipelineBaton) -> Result<PipelineResult, String> {
+fn to_png_buffer(width: i32, mut options: PipelineBaton) -> Result<PipelineResult, String> {
+    let desired_width = if let Some(desired) = [16, 24, 32, 48, 64, 128, 256].iter().find(|w| w > &&width) {
+        *desired
+    } else {
+        256
+    };
     options.file_out = String::new();
     options.format_out = "png".to_string();
+    options.width = desired_width;
+    options.height = desired_width;
+    // Fit "contain"
+    options.canvas = Canvas::Embed;
+    options.resize_background = vec![0.0, 0.0, 0.0, 0.0];
     pipeline::pipline(options).map_err(|e| e.to_string()).map_err(|e| e.to_string())
 }
 
