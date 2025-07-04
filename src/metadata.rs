@@ -90,6 +90,8 @@ impl Default for Metadata {
 }
 
 pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
+    let _guard = crate::util::VipsGuard;
+
     let mut baton = Metadata::default();
     let (image, image_type) = open_input(input)?;
     if image_type != ImageType::UNKNOWN {
@@ -189,6 +191,7 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
         let comments_ptr: *mut c_void = &mut *comments as *mut _ as *mut c_void;
         unsafe { vips_image_map(image.as_mut_ptr(), Some(read_pngcomment), comments_ptr) };
     }
+
     Ok(baton)
 }
 

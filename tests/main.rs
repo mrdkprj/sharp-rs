@@ -45,7 +45,7 @@ fn create() {
     .unwrap()
     .png(None)
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img2.png)"))
+    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img2.png"))
     .unwrap();
     println!("done");
 }
@@ -54,14 +54,14 @@ fn create() {
 #[test]
 fn gif() {
     Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\sample.gif)"),
+        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\sample.gif"),
         SharpOptions {
             animated: Some(true),
             ..Default::default()
         },
     )
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\file_out.webp)"))
+    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\file_out.webp"))
     .unwrap();
 }
 
@@ -81,7 +81,7 @@ fn buf() {
         },
     )
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\my-two-pixels.png)"))
+    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\my-two-pixels.png"))
     .unwrap();
 }
 
@@ -103,7 +103,7 @@ fn rgb() {
         ..Default::default()
     })
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\noise.png)"))
+    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\noise.png"))
     .unwrap();
 }
 
@@ -120,7 +120,7 @@ fn text() {
         ..Default::default()
     })
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\text_bw.png)"))
+    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\text_bw.png"))
     .unwrap();
 }
 
@@ -138,14 +138,25 @@ fn text_rgba() {
         ..Default::default()
     })
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\text_rgba.png)"))
+    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\text_rgba.png"))
     .unwrap();
 }
 
 #[test]
 fn metadata() {
+    let _ = Sharp::new_from_file_with_opts(
+        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
+        SharpOptions {
+            fail_on: Some(FailOn::None),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .metadata()
+    .unwrap();
+    println!("done3");
     let data = Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg)"),
+        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
         SharpOptions {
             fail_on: Some(FailOn::None),
             ..Default::default()

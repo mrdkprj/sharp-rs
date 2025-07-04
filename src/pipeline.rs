@@ -9,6 +9,7 @@ use crate::{
         bandbool, blur, boolean, clahe, convolve, crop_multi_page, dilate, embed_multi_page, ensure_colourspace, erode, flatten, gamma, linear, modulate, negate, normalise, recomb, sharpen,
         threshold, tint, trim, unflatten,
     },
+    util::VipsGuard,
 };
 use libvips::{
     bindings::{VipsForeignKeep_VIPS_FOREIGN_KEEP_EXIF, VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC, VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT},
@@ -626,6 +627,8 @@ pub(crate) fn init_options() -> PipelineBaton {
 }
 
 pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineResult> {
+    let _guard = VipsGuard;
+
     // Open input
     let (image, input_image_type) = if baton.join.is_empty() {
         open_input(&baton.input)?
@@ -2015,11 +2018,6 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             return Err(OperationErrorExt(baton.err.clone()));
         }
     };
-
-    unsafe {
-        libvips::bindings::vips_error_clear();
-        libvips::bindings::vips_thread_shutdown();
-    }
 
     Ok(PipelineResult {
         buffer: match result {

@@ -2,13 +2,14 @@ use crate::{
     metadata::Metadata,
     operation::{AffineOptions, BlurOptions, BooleanOptions, ClaheOptions, FlattenOptions, KernelOptions, ModulateOptions, NegateOptions, NormaliseOptions, SharpenOptions, ThresholdOptions},
     pipeline::{init_options, PipelineBaton},
+    util::*,
 };
 use common::{rgba_from_hex, Canvas, InputDescriptor};
 use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
 pub use libvips::ops::{
-    BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset, OperationBoolean,
+    BandFormat, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
+    OperationBoolean, TextWrap,
 };
-use libvips::VipsApp;
 use metadata::get_metadata;
 use num_derive::{FromPrimitive, ToPrimitive};
 use operation::{ExtendOptions, Fit, Region, ResizeOptions, TrimOptions};
@@ -20,6 +21,7 @@ pub mod input;
 pub mod metadata;
 pub mod operation;
 mod pipeline;
+mod util;
 
 macro_rules! InvalidParameterError {
     ($name:expr, $expected:expr, $actual:expr) => {
@@ -427,20 +429,17 @@ pub struct TileOptions {
     pub basename: Option<String>,
 }
 
-#[allow(dead_code)]
 pub struct Sharp {
-    app: VipsApp,
     options: PipelineBaton,
 }
 
 impl Sharp {
     pub fn new(options: SharpOptions) -> Result<Self, String> {
-        let app = VipsApp::new("sharp-rs", false).map_err(|e| e.to_string())?;
+        init("sharp-rs", false)?;
         let mut all_options = init_options();
         all_options.input = create_input_descriptor(Input::None(), Some(options))?;
 
         Ok(Self {
-            app,
             options: all_options,
         })
     }
@@ -454,11 +453,10 @@ impl Sharp {
     }
 
     fn new_sharp_from_file<P: AsRef<Path>>(filename: P, options: Option<SharpOptions>) -> Result<Self, String> {
-        let app = VipsApp::new("sharp-rs", false).map_err(|e| e.to_string())?;
+        init("sharp-rs", false)?;
         let mut all_options = init_options();
         all_options.input = create_input_descriptor(Input::Path(filename.as_ref().to_string_lossy().to_string()), options)?;
         Ok(Self {
-            app,
             options: all_options,
         })
     }
@@ -476,14 +474,13 @@ impl Sharp {
             return Err("Expected at least two images to join".to_string());
         }
 
-        let app = VipsApp::new("sharp-rs", false).map_err(|e| e.to_string())?;
+        init("sharp-rs", false)?;
         let mut all_options = init_options();
         // Join images together
         let join: Result<Vec<InputDescriptor>, String> = files.iter().map(|file| create_input_descriptor(Input::Path(file.as_ref().to_string_lossy().to_string()), options.clone())).collect();
         all_options.join = join?;
 
         Ok(Self {
-            app,
             options: all_options,
         })
     }
@@ -497,12 +494,11 @@ impl Sharp {
     }
 
     fn new_sharp_from_buffer(buffer: Vec<u8>, options: Option<SharpOptions>) -> Result<Self, String> {
-        let app = VipsApp::new("sharp-rs", false).map_err(|e| e.to_string())?;
+        init("sharp-rs", false)?;
         let mut all_options = init_options();
         all_options.input = create_input_descriptor(Input::Buffer(buffer), options)?;
 
         Ok(Self {
-            app,
             options: all_options,
         })
     }
@@ -520,17 +516,59 @@ impl Sharp {
             return Err("Expected at least two images to join".to_string());
         }
 
-        let app = VipsApp::new("sharp-rs", false).map_err(|e| e.to_string())?;
+        init("sharp-rs", false)?;
         let mut all_options = init_options();
         // Join images together
         let join: Result<Vec<InputDescriptor>, String> = buffers.iter().map(|buffer| create_input_descriptor(Input::Buffer(buffer.to_vec()), options.clone())).collect();
         all_options.join = join?;
 
         Ok(Self {
-            app,
             options: all_options,
         })
     }
+
+    pub fn cache(self, cache: bool) -> Self {
+        if cache {
+            cache_set_max_mem(50);
+            cache_set_max_files(20);
+            cache_set_max(100);
+        } else {
+            cache_set_max_mem(0);
+            cache_set_max_files(0);
+            cache_set_max(0);
+        }
+        self
+    }
+
+    pub fn set_cache(self, memory: u64, files: i32, items: i32) -> Self {
+        cache_set_max_mem(memory);
+        cache_set_max_files(files);
+        cache_set_max(items);
+        self
+    }
+    /*
+      TODO
+        // Get memory stats
+    Napi::Object memory = Napi::Object::New(env);
+    memory.Set("current", round(vips_tracked_get_mem() / 1048576));
+    memory.Set("high", round(vips_tracked_get_mem_highwater() / 1048576));
+    memory.Set("max", round(vips_cache_get_max_mem() / 1048576));
+    // Get file stats
+    Napi::Object files = Napi::Object::New(env);
+    files.Set("current", vips_tracked_get_files());
+    files.Set("max", vips_cache_get_max_files());
+
+    // Get item stats
+    Napi::Object items = Napi::Object::New(env);
+    items.Set("current", vips_cache_get_size());
+    items.Set("max", vips_cache_get_max());
+
+    Napi::Object cache = Napi::Object::New(env);
+    cache.Set("memory", memory);
+    cache.Set("files", files);
+    cache.Set("items", items);
+    return cache;
+       */
 
     /**
      * Write output image data to a file.
@@ -590,7 +628,7 @@ impl Sharp {
 
     pub async fn to_buffer_async(mut self) -> Result<Vec<u8>, String> {
         self.options.file_out = String::new();
-        let result = async_std::task::spawn(async { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
+        let result = async_std::task::spawn(async move { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
         self.options = result.baton;
         Ok(result.buffer)
     }
