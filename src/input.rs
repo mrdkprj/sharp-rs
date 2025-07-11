@@ -471,6 +471,7 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
             };
 
             let image = VipsImage::new_from_file_with_opts(&descriptor.file, option)?;
+
             if image_type == ImageType::SVG || image_type == ImageType::PDF || image_type == ImageType::MAGICK {
                 (set_density(image, descriptor.density)?, image_type)
             } else {

@@ -5,6 +5,21 @@ use sharp::{
 };
 
 #[test]
+fn run_all() {
+    simple();
+    overwrite().unwrap();
+    create();
+    gif();
+    buf();
+    rgb();
+    text();
+    text_rgba();
+    metadata();
+    icon();
+    icon_meta();
+}
+
+#[test]
 fn simple() {
     Sharp::new_from_file_with_opts(
         concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
@@ -26,6 +41,16 @@ fn simple() {
     .unwrap()
     .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img2.jpg"))
     .unwrap();
+}
+
+#[test]
+fn overwrite() -> Result<(), String> {
+    let src = concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg");
+    let dest = concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img_rot.jpg");
+    std::fs::copy(src, dest).unwrap();
+    let x = Sharp::new_from_file(dest)?.with_metadata(None)?.rotate(180, None)?.with_metadata(None)?.to_buffer()?;
+    std::fs::write(dest, x).unwrap();
+    Ok(())
 }
 
 // Create a blank 300x200 PNG image of semi-translucent red pixels

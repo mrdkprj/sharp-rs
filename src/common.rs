@@ -1,8 +1,7 @@
 use libvips::{
     bindings::{
-        g_signal_connect_data, g_type_from_name, vips_blob_get_type, vips_error, vips_foreign_find_load, vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map, vips_image_remove,
-        vips_image_set_array_int, vips_image_set_kill, vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc, GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT,
-        VIPS_META_SEQUENTIAL,
+        g_signal_connect_data, g_type_from_name, vips_blob_get_type, vips_error, vips_foreign_find_load, vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map, vips_image_set_kill,
+        vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc, GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT, VIPS_META_SEQUENTIAL,
     },
     error::Error::{OperationError, OperationErrorExt},
     ops::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
@@ -441,10 +440,7 @@ pub(crate) fn remove_exif(image: VipsImage) -> VipsImage {
     }
 
     for name in field_names.iter() {
-        let cname = CString::new(name.as_str()).unwrap();
-        unsafe {
-            vips_image_remove(image.as_mut_ptr(), cname.as_ptr());
-        }
+        image.remove(name.as_bytes());
     }
     image
 }
@@ -474,8 +470,8 @@ pub(crate) fn set_exif_orientation(image: VipsImage, orientation: i32) -> Result
 */
 pub(crate) fn remove_exif_orientation(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
-    unsafe { vips_image_remove(image.as_mut_ptr(), VIPS_META_ORIENTATION.as_ptr() as _) };
-    unsafe { vips_image_remove(image.as_mut_ptr(), "exif-ifd0-Orientation".as_ptr() as _) };
+    image.remove(VIPS_META_ORIENTATION);
+    image.remove(b"exif-ifd0-Orientation");
     Ok(image)
 }
 
@@ -497,7 +493,7 @@ pub(crate) fn set_animation_properties(image: VipsImage, n_pages: i32, page_heig
             // We have just one delay, repeat that value for all frames.
             delay.extend(std::iter::repeat(delay[0]).take((n_pages - 1) as usize));
         }
-        unsafe { vips_image_set_array_int(copied_image.as_mut_ptr(), "delay".as_ptr() as _, delay.as_ptr(), delay.len() as _) };
+        copied_image.set_array_int(b"delay", delay.as_slice());
     }
     let loop_value = if n_pages == 1 && !has_delay && loop_ == -1 {
         1
@@ -514,13 +510,12 @@ pub(crate) fn set_animation_properties(image: VipsImage, n_pages: i32, page_heig
 /*
   Remove animation properties from image.
 */
-pub(crate) fn remove_animation_properties(image: &VipsImage) -> Result<VipsImage> {
+pub(crate) fn remove_animation_properties(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
-    unsafe {
-        vips_image_remove(image.as_mut_ptr(), VIPS_META_PAGE_HEIGHT.as_ptr() as _);
-        vips_image_remove(image.as_mut_ptr(), "delay".as_ptr() as _);
-        vips_image_remove(image.as_mut_ptr(), "loop".as_ptr() as _);
-    }
+    image.remove(VIPS_META_PAGE_HEIGHT);
+    image.remove(b"delay");
+    image.remove(b"loop");
+
     Ok(image)
 }
 
@@ -529,7 +524,7 @@ pub(crate) fn remove_animation_properties(image: &VipsImage) -> Result<VipsImage
 */
 pub(crate) fn remove_gif_palette(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
-    unsafe { vips_image_remove(image.as_mut_ptr(), "gif-palette".as_ptr() as _) };
+    image.remove(b"gif-palette");
     Ok(image)
 }
 
@@ -813,6 +808,7 @@ pub(crate) fn apply_alpha(image: VipsImage, colour: &[f64], should_premultiply: 
     }
     // Ensure alphaColour colour uses correct colourspace
     alpha_colour = get_rgba_as_colourspace(alpha_colour, image.get_interpretation()?, should_premultiply)?;
+
     // Add non-transparent alpha channel, if required
     if colour[3] < 255.0 && !image.image_hasalpha() {
         let image = image.bandjoin_const(&[255.0 * multiplier])?;
@@ -826,7 +822,7 @@ pub(crate) fn apply_alpha(image: VipsImage, colour: &[f64], should_premultiply: 
   Removes alpha channels, if any.
 */
 pub(crate) fn remove_alpha(image: VipsImage) -> Result<VipsImage> {
-    let mut image = image;
+    let mut image = image.copy()?;
     while image.get_bands() > 1 && image.image_hasalpha() {
         image = image.extract_band_with_opts(0, VOption::new().with("n", VipsValue::Int(image.get_bands() - 1)))?;
     }
@@ -918,9 +914,8 @@ pub(crate) fn resolve_shrink(width: i32, height: i32, target_width: i32, target_
 */
 pub(crate) fn stay_sequential(image: VipsImage, condition: bool) -> Result<VipsImage> {
     if unsafe { vips_image_is_sequential(image.as_mut_ptr()) > 0 } && condition {
-        let mem_copied_image = VipsImage::image_copy_memory(image)?;
-        let mut copied_image = mem_copied_image.copy()?;
-        unsafe { vips_image_remove(&mut copied_image as *mut _ as *mut _, VIPS_META_SEQUENTIAL.as_ptr() as _) };
+        let copied_image = VipsImage::image_copy_memory(image)?.copy()?;
+        copied_image.remove(VIPS_META_SEQUENTIAL);
         Ok(copied_image)
     } else {
         Ok(image)
@@ -935,7 +930,8 @@ pub(crate) fn scalar_image_like(image: &VipsImage, value: f64) -> Result<VipsIma
     let w = image.get_width();
     let h = image.get_height();
     let bands = image.get_bands();
-    let format = image.get_format()?; // match source format
+    // match source format
+    let format = image.get_format()?;
 
     match format {
         BandFormat::Double => {

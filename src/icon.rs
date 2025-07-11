@@ -5,7 +5,7 @@ use crate::{
     common::Canvas,
     input::{CreateRaw, SharpOptions},
     metadata::get_metadata,
-    pipeline::{self, PipelineBaton, PipelineResult},
+    pipeline::{self, PipelineBaton},
     Sharp,
 };
 use std::path::Path;
@@ -16,9 +16,9 @@ impl Sharp {
 
         if self.options.join.is_empty() {
             let width = self.metadata()?.width;
-            let result = to_png_buffer(width, self.options).unwrap();
-            self.options = result.baton;
-            buffers.push(result.buffer);
+            let baton = to_png_buffer(width, self.options).unwrap();
+            buffers.push(baton.buffer_out.clone());
+            self.options = baton;
         } else {
             let mut final_option = self.options.clone();
             for inp in &self.options.join {
@@ -26,9 +26,9 @@ impl Sharp {
                 options.join = Vec::new();
                 options.input = inp.clone();
                 let width = get_metadata(&options.input).map_err(|e| e.to_string())?.width;
-                let result = to_png_buffer(width, options).unwrap();
-                final_option = result.baton;
-                buffers.push(result.buffer);
+                let baton = to_png_buffer(width, options).unwrap();
+                buffers.push(final_option.buffer_out.clone());
+                final_option = baton;
             }
             self.options = final_option;
         }
@@ -112,7 +112,7 @@ struct IconEntry {
     image_type: String,
 }
 
-fn to_png_buffer(width: i32, mut options: PipelineBaton) -> Result<PipelineResult, String> {
+fn to_png_buffer(width: i32, mut options: PipelineBaton) -> Result<PipelineBaton, String> {
     let desired_width = if let Some(desired) = [16, 24, 32, 48, 64, 128, 256].iter().find(|w| w > &&width) {
         *desired
     } else {
@@ -239,7 +239,7 @@ fn read_icon_entry(buffer: &[u8], offset: &mut usize, type_: u16) -> Result<Icon
     *offset += 2;
     if type_ == 1 {
         if buf != 0 && buf != 1 {
-            // throw `Color plane was ${buf}, should be 0 or 1`
+            return Err("Color plane was ${buf}, should be 0 or 1".to_string());
         }
         entry.color_planes = buf;
     } else if type_ == 2 {

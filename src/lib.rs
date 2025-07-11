@@ -527,7 +527,7 @@ impl Sharp {
         })
     }
 
-    pub fn cache(self, cache: bool) -> Self {
+    pub fn cache(cache: bool) {
         if cache {
             cache_set_max_mem(50);
             cache_set_max_files(20);
@@ -537,14 +537,12 @@ impl Sharp {
             cache_set_max_files(0);
             cache_set_max(0);
         }
-        self
     }
 
-    pub fn set_cache(self, memory: u64, files: i32, items: i32) -> Self {
+    pub fn set_cache(memory: u64, files: i32, items: i32) {
         cache_set_max_mem(memory);
         cache_set_max_files(files);
         cache_set_max(items);
-        self
     }
     /*
       TODO
@@ -589,8 +587,8 @@ impl Sharp {
             return Err("Cannot use same file for input and output".to_string());
         }
         self.options.file_out = file_out_string;
-        let result = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
-        self.options = result.baton;
+        let baton = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
+        self.options = baton;
 
         Ok(self)
     }
@@ -601,8 +599,8 @@ impl Sharp {
             return Err("Cannot use same file for input and output".to_string());
         }
         self.options.file_out = file_out_string;
-        let result = async_std::task::spawn(async move { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
-        self.options = result.baton;
+        let baton = async_std::task::spawn(async move { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
+        self.options = baton;
 
         Ok(self)
     }
@@ -621,16 +619,16 @@ impl Sharp {
      */
     pub fn to_buffer(mut self) -> Result<Vec<u8>, String> {
         self.options.file_out = String::new();
-        let result = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
-        self.options = result.baton;
-        Ok(result.buffer)
+        let baton = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
+        self.options = baton;
+        Ok(self.options.buffer_out)
     }
 
     pub async fn to_buffer_async(mut self) -> Result<Vec<u8>, String> {
         self.options.file_out = String::new();
-        let result = async_std::task::spawn(async move { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
-        self.options = result.baton;
-        Ok(result.buffer)
+        let baton = async_std::task::spawn(async move { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
+        self.options = baton;
+        Ok(self.options.buffer_out)
     }
 
     /**

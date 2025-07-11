@@ -24,16 +24,6 @@ use libvips::{
 };
 use std::collections::HashMap;
 
-pub(crate) enum WriteResult {
-    Buffer(Vec<u8>),
-    File(),
-}
-
-pub(crate) struct PipelineResult {
-    pub(crate) buffer: Vec<u8>,
-    pub(crate) baton: PipelineBaton,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct Composite {
     pub(crate) input: InputDescriptor,
@@ -626,7 +616,7 @@ pub(crate) fn init_options() -> PipelineBaton {
     }
 }
 
-pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineResult> {
+pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     let _guard = VipsGuard;
 
     // Open input
@@ -944,6 +934,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineResult> {
     } else {
         "srgb"
     };
+
     if has_profile(&image)
         && image.get_interpretation()? != Interpretation::Labs
         && image.get_interpretation()? != Interpretation::Grey16
@@ -1075,7 +1066,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineResult> {
             image = if n_pages > 1 {
                 embed_multi_page(image, left, top, width, height, Extend::Background, &background, n_pages, &mut target_page_height)?
             } else {
-                image.embed_with_opts(left, top, width, height, VOption::new().with("extend", v_value!(Extend::Background as i32)).with("background", v_value!(background.as_slice())))?
+                image.embed_with_opts(left, top, width, height, VOption::new().with("extend", v_value!(Extend::Background as i32)).with("background", v_value!(background.as_slice()))).unwrap()
             };
         } else if baton.canvas == Canvas::Crop {
             if baton.width > input_width {
@@ -1522,13 +1513,12 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineResult> {
     write(image, input_image_type, baton)
 }
 
-fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineBaton) -> Result<PipelineResult> {
+fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // Output
     set_timeout(&image, baton.timeout_seconds);
-    let result = if baton.file_out.is_empty() {
+    if baton.file_out.is_empty() {
         // Buffer output
         if baton.format_out == "jpeg" || (baton.format_out == "input" && input_image_type == ImageType::Jpeg) {
-            // Write JPEG to buffer
             assert_image_type_dimensions(&image, ImageType::Jpeg)?;
             let area = image.jpegsave_buffer_with_opts(
                 VOption::new()
@@ -1550,14 +1540,13 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("optimize_coding", v_value!(baton.jpeg_optimise_coding)),
             )?;
 
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "jpeg".to_string();
             if baton.colourspace == Interpretation::Cmyk {
                 baton.channels = std::cmp::min(baton.channels, 4);
             } else {
                 baton.channels = std::cmp::min(baton.channels, 3);
             }
-            WriteResult::Buffer(area)
         } else if baton.format_out == "jp2" || (baton.format_out == "input" && input_image_type == ImageType::JP2) {
             // Write JP2 to Buffer
             assert_image_type_dimensions(&image, ImageType::JP2)?;
@@ -1577,9 +1566,8 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("tile_width", v_value!(baton.jp2_tile_width)),
             )?;
 
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "jp2".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "png" || (baton.format_out == "input" && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG)) {
             // Write PNG to buffer
             assert_image_type_dimensions(&image, ImageType::Png)?;
@@ -1609,9 +1597,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     )
                     .with("dither", v_value!(baton.png_dither)),
             )?;
-            baton.buffer_out = area.clone();
+
+            baton.buffer_out = area;
             baton.format_out = "png".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "webp" || (baton.format_out == "input" && input_image_type == ImageType::Webp) {
             // Write WEBP to buffer
             assert_image_type_dimensions(&image, ImageType::Webp)?;
@@ -1629,9 +1617,8 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("mixed", v_value!(baton.webp_mixed))
                     .with("alpha_q", v_value!(baton.webp_alpha_quality)),
             )?;
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "webp".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "gif" || (baton.format_out == "input" && input_image_type == ImageType::GIF) {
             // Write GIF to buffer
             assert_image_type_dimensions(&image, ImageType::GIF)?;
@@ -1646,9 +1633,8 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("interpalette_maxerror", v_value!(baton.gif_inter_palette_max_error))
                     .with("dither", v_value!(baton.gif_dither)),
             )?;
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "gif".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "tiff" || (baton.format_out == "input" && input_image_type == ImageType::Tiff) {
             // Write TIFF to buffer
             if baton.tiff_compression == ForeignTiffCompression::Jpeg {
@@ -1675,13 +1661,12 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("yres", v_value!(baton.tiff_yres))
                     .with("resunit", v_value!(baton.tiff_resolution_unit as i32)),
             )?;
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "tiff".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "heif" || (baton.format_out == "input" && input_image_type == ImageType::HEIF) {
             // Write HEIF to buffer
             assert_image_type_dimensions(&image, ImageType::HEIF)?;
-            image = remove_animation_properties(&image)?;
+            image = remove_animation_properties(image)?;
             let area = image.heifsave_buffer_with_opts(
                 VOption::new()
                     .with("keep", v_value!(baton.keep_metadata))
@@ -1699,9 +1684,8 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     )
                     .with("lossless", v_value!(baton.heif_lossless)),
             )?;
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "heif".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "dz" {
             // Write DZ to buffer
             baton.tile_container = ForeignDzContainer::Zip;
@@ -1730,12 +1714,11 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                 options.set("basename", v_value!(&baton.tile_basename));
             }
             let area = image.dzsave_buffer_with_opts(options)?;
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "dz".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "jxl" || (baton.format_out == "input" && input_image_type == ImageType::JXL) {
             // Write JXL to buffer
-            image = remove_animation_properties(&image)?;
+            image = remove_animation_properties(image)?;
             let area = image.jxlsave_buffer_with_opts(
                 VOption::new()
                     .with("keep", v_value!(baton.keep_metadata))
@@ -1744,9 +1727,8 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("effort", v_value!(baton.jxl_effort))
                     .with("lossless", v_value!(baton.jxl_lossless)),
             )?;
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             baton.format_out = "jxl".to_string();
-            WriteResult::Buffer(area)
         } else if baton.format_out == "raw" || (baton.format_out == "input" && input_image_type == ImageType::RAW) {
             // Write raw, uncompressed image data to buffer
             if baton.greyscale || image.get_interpretation()? == Interpretation::BW {
@@ -1760,13 +1742,12 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             }
             // Get raw image data
             let area = image.image_write_to_memory();
-            baton.buffer_out = area.clone();
+            baton.buffer_out = area;
             if baton.buffer_out.is_empty() {
                 baton.err.push_str("Could not allocate enough memory for raw output");
                 return Err(OperationErrorExt(baton.err.clone()));
             }
             baton.format_out = "raw".to_string();
-            WriteResult::Buffer(area)
         } else {
             // Unsupported output format
             baton.err.push_str("Unsupported output format ");
@@ -1819,7 +1800,6 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             )?;
             baton.format_out = "jpeg".to_string();
             baton.channels = std::cmp::min(baton.channels, 3);
-            WriteResult::File()
         } else if baton.format_out == "jp2" || (might_match_input && is_jp2) || (will_match_input && input_image_type == ImageType::JP2) {
             // Write JP2 to file
             assert_image_type_dimensions(&image, ImageType::JP2)?;
@@ -1840,7 +1820,6 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("tile_width", v_value!(baton.jp2_tile_width)),
             )?;
             baton.format_out = "jp2".to_string();
-            WriteResult::File()
         } else if baton.format_out == "png" || (might_match_input && is_png) || (will_match_input && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG)) {
             // Write PNG to file
             assert_image_type_dimensions(&image, ImageType::Png)?;
@@ -1872,7 +1851,6 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("dither", v_value!(baton.png_dither)),
             )?;
             baton.format_out = "png".to_string();
-            WriteResult::File()
         } else if baton.format_out == "webp" || (might_match_input && is_webp) || (will_match_input && input_image_type == ImageType::Webp) {
             // Write WEBP to file
             assert_image_type_dimensions(&image, ImageType::Webp)?;
@@ -1892,7 +1870,6 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("alpha_q", v_value!(baton.webp_alpha_quality)),
             )?;
             baton.format_out = "webp".to_string();
-            WriteResult::File()
         } else if baton.format_out == "gif" || (might_match_input && is_gif) || (will_match_input && input_image_type == ImageType::GIF) {
             // Write GIF to file
             assert_image_type_dimensions(&image, ImageType::GIF)?;
@@ -1907,7 +1884,6 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("dither", v_value!(baton.gif_dither)),
             )?;
             baton.format_out = "gif".to_string();
-            WriteResult::File()
         } else if baton.format_out == "tiff" || (might_match_input && is_tiff) || (will_match_input && input_image_type == ImageType::Tiff) {
             // Write TIFF to file
             if baton.tiff_compression == ForeignTiffCompression::Jpeg {
@@ -1936,11 +1912,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("resunit", v_value!(baton.tiff_resolution_unit as i32)),
             )?;
             baton.format_out = "tiff".to_string();
-            WriteResult::File()
         } else if baton.format_out == "heif" || (might_match_input && is_heif) || (will_match_input && input_image_type == ImageType::HEIF) {
             // Write HEIF to file
             assert_image_type_dimensions(&image, ImageType::HEIF)?;
-            image = remove_animation_properties(&image)?;
+            image = remove_animation_properties(image)?;
             image.heifsave_with_opts(
                 &baton.file_out,
                 VOption::new()
@@ -1960,10 +1935,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("lossless", v_value!(baton.heif_lossless)),
             )?;
             baton.format_out = "heif".to_string();
-            WriteResult::File()
         } else if baton.format_out == "jxl" || (might_match_input && is_jxl) || (will_match_input && input_image_type == ImageType::JXL) {
             // Write JXL to file
-            image = remove_animation_properties(&image)?;
+            image = remove_animation_properties(image)?;
             image.jxlsave_with_opts(
                 &baton.file_out,
                 VOption::new()
@@ -1974,7 +1948,6 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .with("lossless", v_value!(baton.jxl_lossless)),
             )?;
             baton.format_out = "jxl".to_string();
-            WriteResult::File()
         } else if baton.format_out == "dz" || is_dz || is_dz_zip {
             // Write DZ to file
             if is_dz_zip {
@@ -2006,12 +1979,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             }
             image.dzsave_with_opts(&baton.file_out, options)?;
             baton.format_out = "dz".to_string();
-            WriteResult::File()
         } else if baton.format_out == "v" || (might_match_input && is_v) || (will_match_input && input_image_type == ImageType::VIPS) {
             // Write V to file
             image.vipssave_with_opts(&baton.file_out, VOption::new().with("keep", v_value!(baton.keep_metadata)))?;
             baton.format_out = "v".to_string();
-            WriteResult::File()
         } else {
             // Unsupported output format
             baton.err.push_str(&format!("Unsupported output format {}", baton.file_out));
@@ -2019,13 +1990,7 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
         }
     };
 
-    Ok(PipelineResult {
-        buffer: match result {
-            WriteResult::Buffer(buffer) => buffer,
-            WriteResult::File() => Vec::new(),
-        },
-        baton,
-    })
+    Ok(baton)
 }
 /*
   Calculate the angle of rotation and need-to-flip for the given Exif orientation
