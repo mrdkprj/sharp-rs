@@ -661,19 +661,6 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         (image, input_image_type)
     };
 
-    // #[cfg(target_os = "windows")]
-    // let image = if baton.file_out.is_empty() && input_image_type == ImageType::Jpeg {
-    //     unsafe { libvips::bindings::g_object_unref(image.as_mut_ptr() as _) };
-    //     VipsImage::image_copy_memory(image)?
-    // } else {
-    //     image
-    // };
-    let y = 0;
-    if y > 0 {
-        unsafe { libvips::bindings::vips_shutdown() };
-        return Ok(baton);
-    }
-
     let access = baton.input.access;
     let mut image = ensure_colourspace(image, baton.colourspace_pipeline)?;
 
