@@ -1066,7 +1066,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             image = if n_pages > 1 {
                 embed_multi_page(image, left, top, width, height, Extend::Background, &background, n_pages, &mut target_page_height)?
             } else {
-                image.embed_with_opts(left, top, width, height, VOption::new().with("extend", v_value!(Extend::Background as i32)).with("background", v_value!(background.as_slice()))).unwrap()
+                image.embed_with_opts(left, top, width, height, VOption::new().with("extend", v_value!(Extend::Background as i32)).with("background", v_value!(background.as_slice())))?
             };
         } else if baton.canvas == Canvas::Crop {
             if baton.width > input_width {

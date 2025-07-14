@@ -1,4 +1,5 @@
 use crate::{
+    common::{determine_image_type, determine_image_type_from_str, image_type_id},
     metadata::Metadata,
     operation::{AffineOptions, BlurOptions, BooleanOptions, ClaheOptions, FlattenOptions, KernelOptions, ModulateOptions, NegateOptions, NormaliseOptions, SharpenOptions, ThresholdOptions},
     pipeline::{init_options, PipelineBaton},
@@ -544,29 +545,23 @@ impl Sharp {
         cache_set_max_files(files);
         cache_set_max(items);
     }
+
     /*
-      TODO
-        // Get memory stats
-    Napi::Object memory = Napi::Object::New(env);
-    memory.Set("current", round(vips_tracked_get_mem() / 1048576));
-    memory.Set("high", round(vips_tracked_get_mem_highwater() / 1048576));
-    memory.Set("max", round(vips_cache_get_max_mem() / 1048576));
-    // Get file stats
-    Napi::Object files = Napi::Object::New(env);
-    files.Set("current", vips_tracked_get_files());
-    files.Set("max", vips_cache_get_max_files());
+     * Get file type.
+     */
+    pub fn get_file_type(&self) -> String {
+        if !self.options.input.file.is_empty() {
+            let image_type = determine_image_type_from_str(&self.options.input.file);
+            return image_type_id(image_type);
+        }
 
-    // Get item stats
-    Napi::Object items = Napi::Object::New(env);
-    items.Set("current", vips_cache_get_size());
-    items.Set("max", vips_cache_get_max());
+        if !self.options.input.buffer.is_empty() {
+            let image_type = determine_image_type(&self.options.input.buffer);
+            return image_type_id(image_type);
+        }
 
-    Napi::Object cache = Napi::Object::New(env);
-    cache.Set("memory", memory);
-    cache.Set("files", files);
-    cache.Set("items", items);
-    return cache;
-       */
+        String::new()
+    }
 
     /**
      * Write output image data to a file.
