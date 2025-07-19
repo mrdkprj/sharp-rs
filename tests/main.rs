@@ -5,21 +5,6 @@ use sharp::{
 };
 
 #[test]
-fn run_all() {
-    simple();
-    overwrite().unwrap();
-    create();
-    gif();
-    buf();
-    rgb();
-    text();
-    text_rgba();
-    metadata();
-    icon();
-    icon_meta();
-}
-
-#[test]
 fn simple() {
     Sharp::new_from_file_with_opts(
         concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
@@ -44,13 +29,12 @@ fn simple() {
 }
 
 #[test]
-fn overwrite() -> Result<(), String> {
+fn overwrite() {
     let src = concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg");
     let dest = concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img_rot.jpg");
     std::fs::copy(src, dest).unwrap();
-    let x = Sharp::new_from_file(dest)?.with_metadata(None)?.rotate(180, None)?.to_buffer()?;
+    let x = Sharp::new_from_file(dest).unwrap().with_metadata(None).unwrap().rotate(180, None).unwrap().to_buffer().unwrap();
     std::fs::write(dest, x).unwrap();
-    Ok(())
 }
 
 // Create a blank 300x200 PNG image of semi-translucent red pixels
@@ -72,7 +56,6 @@ fn create() {
     .unwrap()
     .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img2.png"))
     .unwrap();
-    println!("done");
 }
 
 // Convert an animated GIF to an animated WebP
@@ -211,6 +194,22 @@ fn icon() {
 fn icon_meta() {
     let x = Sharp::from_icon_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.ico")).unwrap().metadata().unwrap();
     println!("icon:{:?}", x);
+}
+
+#[test]
+fn stat() {
+    Sharp::cache(true);
+    let x = Sharp::new_from_file_with_opts(
+        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
+        SharpOptions {
+            fail_on: Some(FailOn::None),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .stats()
+    .unwrap();
+    println!("{:?}", x);
 }
 /*
  * @example

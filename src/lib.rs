@@ -1,5 +1,4 @@
 use crate::{
-    common::{determine_image_type, determine_image_type_from_str, image_type_id},
     metadata::Metadata,
     operation::{AffineOptions, BlurOptions, BooleanOptions, ClaheOptions, FlattenOptions, KernelOptions, ModulateOptions, NegateOptions, NormaliseOptions, SharpenOptions, ThresholdOptions},
     pipeline::{init_options, PipelineBaton},
@@ -22,6 +21,7 @@ pub mod input;
 pub mod metadata;
 pub mod operation;
 mod pipeline;
+mod stats;
 mod util;
 
 macro_rules! InvalidParameterError {
@@ -526,41 +526,6 @@ impl Sharp {
         Ok(Self {
             options: all_options,
         })
-    }
-
-    pub fn cache(cache: bool) {
-        if cache {
-            cache_set_max_mem(50);
-            cache_set_max_files(20);
-            cache_set_max(100);
-        } else {
-            cache_set_max_mem(0);
-            cache_set_max_files(0);
-            cache_set_max(0);
-        }
-    }
-
-    pub fn set_cache(memory: u64, files: i32, items: i32) {
-        cache_set_max_mem(memory);
-        cache_set_max_files(files);
-        cache_set_max(items);
-    }
-
-    /*
-     * Get file type.
-     */
-    pub fn get_file_type(&self) -> String {
-        if !self.options.input.file.is_empty() {
-            let image_type = determine_image_type_from_str(&self.options.input.file);
-            return image_type_id(image_type);
-        }
-
-        if !self.options.input.buffer.is_empty() {
-            let image_type = determine_image_type(&self.options.input.buffer);
-            return image_type_id(image_type);
-        }
-
-        String::new()
     }
 
     /**

@@ -1,19 +1,21 @@
 use libvips::{
     bindings::{
-        g_signal_connect_data, g_type_from_name, vips_blob_get_type, vips_error, vips_foreign_find_load, vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map, vips_image_set_kill,
+        g_signal_connect_data, vips_blob_get_type, vips_error, vips_foreign_find_load, vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map, vips_image_set_kill,
         vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc, GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT, VIPS_META_SEQUENTIAL,
     },
-    error::Error::{OperationError, OperationErrorExt},
+    error::Error::OperationError,
     ops::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
+    utils::{get_g_type, G_TYPE_INT},
     voption::{VOption, VipsValue},
     Result, VipsImage,
 };
 use std::{
     collections::HashMap,
     ffi::{c_char, c_int, c_void, CStr, CString},
-    slice,
     sync::OnceLock,
 };
+
+use crate::util::new_c_string;
 
 #[derive(Debug, Clone)]
 pub(crate) struct InputDescriptor {
@@ -471,7 +473,7 @@ pub(crate) fn set_exif_orientation(image: VipsImage, orientation: i32) -> Result
 pub(crate) fn remove_exif_orientation(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
     image.remove(VIPS_META_ORIENTATION);
-    image.remove(b"exif-ifd0-Orientation");
+    image.remove("exif-ifd0-Orientation");
     Ok(image)
 }
 
@@ -493,7 +495,7 @@ pub(crate) fn set_animation_properties(image: VipsImage, n_pages: i32, page_heig
             // We have just one delay, repeat that value for all frames.
             delay.extend(std::iter::repeat(delay[0]).take((n_pages - 1) as usize));
         }
-        copied_image.set_array_int(b"delay", delay.as_slice());
+        copied_image.set_array_int("delay", delay.as_slice());
     }
     let loop_value = if n_pages == 1 && !has_delay && loop_ == -1 {
         1
@@ -501,7 +503,7 @@ pub(crate) fn set_animation_properties(image: VipsImage, n_pages: i32, page_heig
         loop_
     };
     if loop_value != -1 {
-        copied_image.set_int(b"loop", loop_value);
+        copied_image.set_int("loop", loop_value);
     }
 
     Ok(copied_image)
@@ -513,8 +515,8 @@ pub(crate) fn set_animation_properties(image: VipsImage, n_pages: i32, page_heig
 pub(crate) fn remove_animation_properties(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
     image.remove(VIPS_META_PAGE_HEIGHT);
-    image.remove(b"delay");
-    image.remove(b"loop");
+    image.remove("delay");
+    image.remove("loop");
 
     Ok(image)
 }
@@ -524,7 +526,7 @@ pub(crate) fn remove_animation_properties(image: VipsImage) -> Result<VipsImage>
 */
 pub(crate) fn remove_gif_palette(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
-    image.remove(b"gif-palette");
+    image.remove("gif-palette");
     Ok(image)
 }
 
@@ -555,7 +557,7 @@ pub(crate) fn set_density(image: VipsImage, density: f64) -> Result<VipsImage> {
   Check the proposed format supports the current dimensions.
 */
 pub(crate) fn assert_image_type_dimensions(image: &VipsImage, image_type: ImageType) -> Result<()> {
-    let height = if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type("gint") {
+    let height = if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
         image.get_int(VIPS_META_PAGE_HEIGHT)?
     } else {
         image.get_height()
@@ -768,7 +770,7 @@ pub(crate) fn get_rgba_as_colourspace(rgba: Vec<f64>, interpretation: Interpreta
         return Ok(rgba);
     }
     let pixel = VipsImage::image_new_matrix(1, 1)?;
-    pixel.set_int(b"bands", bands as _);
+    pixel.set_int("bands", bands as _);
     let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(interpretation, VOption::new().with("source_space", VipsValue::Int(Interpretation::Srgb as _)))?;
 
     if should_premultiply {
@@ -840,10 +842,6 @@ pub(crate) fn ensure_alpha(image: VipsImage, value: f64) -> Result<VipsImage> {
     } else {
         Ok(image)
     }
-}
-
-pub(crate) fn get_alpha_image(image: &VipsImage) -> Result<VipsImage> {
-    image.extract_band(image.get_bands() - 1)
 }
 
 pub(crate) fn resolve_shrink(width: i32, height: i32, target_width: i32, target_height: i32, canvas: Canvas, without_enlargement: bool, without_reduction: bool) -> (f64, f64) {
@@ -920,52 +918,4 @@ pub(crate) fn stay_sequential(image: VipsImage, condition: bool) -> Result<VipsI
     } else {
         Ok(image)
     }
-}
-
-pub(crate) fn scale_image(image: VipsImage, scale: f64) -> Result<VipsImage> {
-    image.multiply(&scalar_image_like(&image, scale)?)
-}
-
-pub(crate) fn scalar_image_like(image: &VipsImage, value: f64) -> Result<VipsImage> {
-    let w = image.get_width();
-    let h = image.get_height();
-    let bands = image.get_bands();
-    // match source format
-    let format = image.get_format()?;
-
-    match format {
-        BandFormat::Double => {
-            let data: Vec<f64> = vec![value; (w * h * bands) as usize];
-            let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * std::mem::size_of::<f64>()) };
-            VipsImage::new_from_memory(bytes, w, h, bands, BandFormat::Double)
-        }
-        BandFormat::Float => {
-            let data: Vec<f32> = vec![value as f32; (w * h * bands) as usize];
-            let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * std::mem::size_of::<f32>()) };
-            VipsImage::new_from_memory(bytes, w, h, bands, BandFormat::Float)
-        }
-        BandFormat::Uchar => {
-            let data: Vec<u8> = vec![value.clamp(0.0, 255.0) as u8; (w * h * bands) as usize];
-            VipsImage::new_from_memory(&data, w, h, bands, BandFormat::Uchar)
-        }
-        _ => Err(OperationErrorExt(format!("Unsupported format: {:?}", format))),
-    }
-}
-
-pub(crate) fn image_from_getpoint(vec: &[f64]) -> Result<VipsImage> {
-    let bands = vec.len() as i32;
-
-    let bytes: &[u8] = unsafe { slice::from_raw_parts(vec.as_ptr() as *const u8, std::mem::size_of_val(vec)) };
-
-    VipsImage::new_from_memory(bytes, 1, 1, bands, BandFormat::Double)
-}
-
-#[inline]
-pub(crate) fn new_c_string(string: &str) -> Result<CString> {
-    CString::new(string).map_err(|_| libvips::error::Error::InitializationError("Error initializing C string."))
-}
-
-pub(crate) fn get_g_type(name: &str) -> u64 {
-    let type_name = new_c_string(name).unwrap();
-    unsafe { g_type_from_name(type_name.as_ptr()) }
 }

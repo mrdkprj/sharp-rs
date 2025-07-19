@@ -1,5 +1,5 @@
 use crate::{
-    common::{exif_orientation, get_density, get_g_type, has_density, has_profile, image_type_id, ImageType, InputDescriptor},
+    common::{exif_orientation, get_density, has_density, has_profile, image_type_id, ImageType, InputDescriptor},
     input::open_input,
 };
 use libvips::{
@@ -8,6 +8,7 @@ use libvips::{
         VIPS_META_EXIF_NAME, VIPS_META_ICC_NAME, VIPS_META_IPTC_NAME, VIPS_META_N_PAGES, VIPS_META_N_SUBIFDS, VIPS_META_PAGE_HEIGHT, VIPS_META_PALETTE, VIPS_META_PHOTOSHOP_NAME,
         VIPS_META_RESOLUTION_UNIT, VIPS_META_XMP_NAME,
     },
+    utils::{get_g_type, G_TYPE_INT},
     Result,
 };
 use serde::{Deserialize, Serialize};
@@ -106,44 +107,44 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
         if has_density(&image) {
             baton.density = get_density(&image);
         }
-        if image.get_typeof(b"jpeg-chroma-subsample") == unsafe { vips_ref_string_get_type() } {
-            baton.chroma_subsampling = image.get_string(b"jpeg-chroma-subsample")?;
+        if image.get_typeof("jpeg-chroma-subsample") == unsafe { vips_ref_string_get_type() } {
+            baton.chroma_subsampling = image.get_string("jpeg-chroma-subsample")?;
         }
-        if image.get_typeof(b"interlaced") == get_g_type("gint") {
-            baton.is_progressive = image.get_int(b"interlaced")? == 1;
+        if image.get_typeof("interlaced") == get_g_type(G_TYPE_INT) {
+            baton.is_progressive = image.get_int("interlaced")? == 1;
         }
-        if image.get_typeof(VIPS_META_PALETTE) == get_g_type("gint") {
+        if image.get_typeof(VIPS_META_PALETTE) == get_g_type(G_TYPE_INT) {
             baton.is_palette = image.get_int(VIPS_META_PALETTE)? == 1;
         }
-        if image.get_typeof(VIPS_META_BITS_PER_SAMPLE) == get_g_type("gint") {
+        if image.get_typeof(VIPS_META_BITS_PER_SAMPLE) == get_g_type(G_TYPE_INT) {
             baton.bits_per_sample = image.get_int(VIPS_META_BITS_PER_SAMPLE)?;
         }
-        if image.get_typeof(VIPS_META_N_PAGES) == get_g_type("gint") {
+        if image.get_typeof(VIPS_META_N_PAGES) == get_g_type(G_TYPE_INT) {
             baton.pages = image.get_int(VIPS_META_N_PAGES)?;
         }
-        if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type("gint") {
+        if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
             baton.page_height = image.get_int(VIPS_META_PAGE_HEIGHT)?;
         }
-        if image.get_typeof(b"loop") == get_g_type("gint") {
-            baton.loop_ = image.get_int(b"loop")?;
+        if image.get_typeof("loop") == get_g_type(G_TYPE_INT) {
+            baton.loop_ = image.get_int("loop")?;
         }
-        if image.get_typeof(b"delay") == unsafe { vips_array_int_get_type() } {
-            baton.delay = image.get_array_int(b"delay")?;
+        if image.get_typeof("delay") == unsafe { vips_array_int_get_type() } {
+            baton.delay = image.get_array_int("delay")?;
         }
-        if image.get_typeof(b"heif-primary") == get_g_type("gint") {
-            baton.page_primary = image.get_int(b"heif-primary")?;
+        if image.get_typeof("heif-primary") == get_g_type(G_TYPE_INT) {
+            baton.page_primary = image.get_int("heif-primary")?;
         }
-        if image.get_typeof(b"heif-compression") == unsafe { vips_ref_string_get_type() } {
-            baton.compression = image.get_string(b"heif-compression")?;
+        if image.get_typeof("heif-compression") == unsafe { vips_ref_string_get_type() } {
+            baton.compression = image.get_string("heif-compression")?;
         }
         if image.get_typeof(VIPS_META_RESOLUTION_UNIT) == unsafe { vips_ref_string_get_type() } {
             baton.resolution_unit = image.get_string(VIPS_META_RESOLUTION_UNIT)?;
         }
-        if image.get_typeof(b"magick-format") == unsafe { vips_ref_string_get_type() } {
-            baton.format_magick = image.get_string(b"magick-format")?;
+        if image.get_typeof("magick-format") == unsafe { vips_ref_string_get_type() } {
+            baton.format_magick = image.get_string("magick-format")?;
         }
-        if image.get_typeof(b"openslide.level-count") == unsafe { vips_ref_string_get_type() } {
-            let levels: i32 = image.get_string(b"openslide.level-count")?.parse().unwrap();
+        if image.get_typeof("openslide.level-count") == unsafe { vips_ref_string_get_type() } {
+            let levels: i32 = image.get_string("openslide.level-count")?.parse().unwrap();
             for l in 0..levels {
                 let prefix = format!(r#"openslide.level["{:?}"]."#, l);
                 let width: i32 = image.get_string(format!("{}width", prefix).as_bytes())?.parse().unwrap();
@@ -151,12 +152,12 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
                 baton.levels.push((width, height));
             }
         }
-        if image.get_typeof(VIPS_META_N_SUBIFDS) == get_g_type("gint") {
+        if image.get_typeof(VIPS_META_N_SUBIFDS) == get_g_type(G_TYPE_INT) {
             baton.subifds = image.get_int(VIPS_META_N_SUBIFDS)?;
         }
         baton.has_profile = has_profile(&image);
-        if image.get_typeof(b"background") == unsafe { vips_array_double_get_type() } {
-            baton.background = image.get_array_double(b"background")?;
+        if image.get_typeof("background") == unsafe { vips_array_double_get_type() } {
+            baton.background = image.get_array_double("background")?;
         }
         // Derived attributes
         baton.has_alpha = image.image_hasalpha();

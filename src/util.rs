@@ -1,178 +1,142 @@
-#![allow(dead_code)]
-use libvips::bindings::{self, vips_error_clear, vips_thread_shutdown};
+use crate::{
+    common::{determine_image_type, determine_image_type_from_str, image_type_id},
+    Sharp,
+};
+use libvips::bindings::{
+    vips_cache_get_max, vips_cache_get_max_files, vips_cache_get_max_mem, vips_cache_get_size, vips_cache_set_max, vips_cache_set_max_files, vips_cache_set_max_mem, vips_concurrency_get,
+    vips_concurrency_set, vips_error_clear, vips_init, vips_leak_set, vips_thread_shutdown, vips_tracked_get_files, vips_tracked_get_mem, vips_tracked_get_mem_highwater,
+};
 use std::ffi::CString;
 
-pub(crate) fn progress_set(flag: bool) {
-    unsafe {
-        bindings::vips_progress_set(if flag {
-            1
+#[derive(Debug, Clone, Default)]
+pub struct Memory {
+    pub current: u64,
+    pub high: u64,
+    pub max: u64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Files {
+    pub current: i32,
+    pub max: i32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Items {
+    pub current: i32,
+    pub max: i32,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CacheResult {
+    pub memory: Memory,
+    pub files: Files,
+    pub items: Items,
+}
+
+impl Sharp {
+    /*
+     * Get file type.
+     */
+    pub fn get_file_type(&self) -> String {
+        if !self.options.input.file.is_empty() {
+            let image_type = determine_image_type_from_str(&self.options.input.file);
+            return image_type_id(image_type);
+        }
+
+        if !self.options.input.buffer.is_empty() {
+            let image_type = determine_image_type(&self.options.input.buffer);
+            return image_type_id(image_type);
+        }
+
+        String::new()
+    }
+
+    /**
+     * Gets or, when options are provided, sets the limits of _libvips'_ operation cache.
+     * Existing entries in the cache will be trimmed after any change in limits.
+     * This method always returns cache statistics,
+     * useful for determining how much working memory is required for a particular task.
+     *
+     * @example
+     * const stats = sharp.cache();
+     * @example
+     * sharp.cache(false);
+     *
+     * @param {Object|boolean} [options=true] - Object with the following attributes, or boolean where true uses default cache settings and false removes all caching
+     * @returns {Object}
+     */
+    pub fn cache(cache: bool) -> CacheResult {
+        if cache {
+            Self::set_cache(50, 20, 100)
         } else {
-            0
-        });
+            Self::set_cache(0, 0, 0)
+        }
     }
-}
 
-pub(crate) fn get_disc_threshold() -> u64 {
-    unsafe { bindings::vips_get_disc_threshold() }
-}
+    /**
+     * Gets or, when options are provided, sets the limits of _libvips'_ operation cache.
+     * Existing entries in the cache will be trimmed after any change in limits.
+     * This method always returns cache statistics,
+     * useful for determining how much working memory is required for a particular task.
+     *
+     * @example
+     * const stats = sharp.cache();
+     * @example
+     * sharp.cache( { items: 200 } );
+     * sharp.cache( { files: 0 } );
+     *
+     * @param {number} [options.memory=50] - is the maximum memory in MB to use for this cache
+     * @param {number} [options.files=20] - is the maximum number of files to hold open
+     * @param {number} [options.items=100] - is the maximum number of operations to cache
+     * @returns {Object}
+     */
+    pub fn set_cache(memory: u64, files: i32, items: i32) -> CacheResult {
+        unsafe {
+            // Set memory limit
+            vips_cache_set_max_mem(memory);
+            // Set file limit
+            vips_cache_set_max_files(files);
+            // Set items limit
+            vips_cache_set_max(items);
 
-// pub(crate) fn version_string() -> Result<String, String> {
-//     unsafe {
-//         let version = CStr::from_ptr(bindings::vips_version_string());
-//         version.to_str().map_err(|_| "Error initializing string".to_string())?.to_string()
-//     }
-// }
+            let mut result = CacheResult::default();
+            // Get memory stats
+            result.memory.current = vips_tracked_get_mem() / 1048576;
+            result.memory.high = vips_tracked_get_mem_highwater() / 1048576;
+            result.memory.max = vips_cache_get_max_mem() / 1048576;
 
-pub(crate) fn thread_shutdown() {
-    unsafe {
-        bindings::vips_thread_shutdown();
+            // Get file stats
+            result.files.current = vips_tracked_get_files();
+            result.files.max = vips_cache_get_max_files();
+
+            // Get item stats
+            result.items.current = vips_cache_get_size();
+            result.items.max = vips_cache_get_max();
+
+            result
+        }
     }
-}
 
-// pub(crate) fn error_buffer() -> Result<&str, String> {
-//     unsafe {
-//         let buffer = CStr::from_ptr(bindings::vips_error_buffer());
-//         buffer.to_str().map_err(|_| "Error initializing string".to_string())
-//     }
-// }
-
-pub(crate) fn error(domain: &str, error: &str) -> Result<(), String> {
-    unsafe {
-        let c_str_error = new_c_string(error)?;
-        let c_str_domain = new_c_string(domain)?;
-        bindings::vips_error(c_str_domain.as_ptr(), c_str_error.as_ptr());
-        Ok(())
+    /*
+     * Set size of thread pool
+     */
+    pub fn set_concurrency(max: i32) {
+        unsafe { vips_concurrency_set(max) };
     }
-}
 
-pub(crate) fn error_system(code: i32, domain: &str, error: &str) -> Result<(), String> {
-    unsafe {
-        let c_str_error = new_c_string(error)?;
-        let c_str_domain = new_c_string(domain)?;
-        bindings::vips_error_system(code, c_str_domain.as_ptr(), c_str_error.as_ptr());
-        Ok(())
-    }
-}
-
-pub(crate) fn freeze_error_buffer() {
-    unsafe {
-        bindings::vips_error_freeze();
-    }
-}
-
-pub(crate) fn error_clear() {
-    unsafe {
-        bindings::vips_error_clear();
-    }
-}
-
-pub(crate) fn error_thaw() {
-    unsafe {
-        bindings::vips_error_thaw();
-    }
-}
-
-pub(crate) fn error_exit(error: &str) -> Result<(), String> {
-    unsafe {
-        let c_str_error = new_c_string(error)?;
-        bindings::vips_error_exit(c_str_error.as_ptr());
-    }
-}
-
-pub(crate) fn cache_print() {
-    unsafe {
-        bindings::vips_cache_print();
-    }
-}
-
-pub(crate) fn cache_set_max(max: i32) {
-    unsafe {
-        bindings::vips_cache_set_max(max);
-    }
-}
-
-pub(crate) fn cache_set_max_mem(max: u64) {
-    unsafe {
-        bindings::vips_cache_set_max_mem(max);
-    }
-}
-
-pub(crate) fn cache_get_max() -> i32 {
-    unsafe { bindings::vips_cache_get_max() }
-}
-
-pub(crate) fn cache_get_max_mem() -> u64 {
-    unsafe { bindings::vips_cache_get_max_mem() }
-}
-
-pub(crate) fn cache_get_size() -> i32 {
-    unsafe { bindings::vips_cache_get_size() }
-}
-
-pub(crate) fn cache_set_max_files(max: i32) {
-    unsafe {
-        bindings::vips_cache_set_max_files(max);
-    }
-}
-
-pub(crate) fn cache_get_max_files() -> i32 {
-    unsafe { bindings::vips_cache_get_max_files() }
-}
-
-pub(crate) fn vips_cache_set_dump(flag: bool) {
-    unsafe {
-        bindings::vips_cache_set_dump(if flag {
-            1
-        } else {
-            0
-        });
-    }
-}
-
-pub(crate) fn vips_cache_set_trace(flag: bool) {
-    unsafe {
-        bindings::vips_cache_set_trace(if flag {
-            1
-        } else {
-            0
-        });
-    }
-}
-
-/// set the number of worker threads for vips to operate
-pub(crate) fn concurrency_set(max: i32) {
-    unsafe {
-        bindings::vips_concurrency_set(max);
-    }
-}
-
-/// get the number of worker threads that vips is operating
-pub(crate) fn concurrency_get() -> i32 {
-    unsafe { bindings::vips_concurrency_get() }
-}
-
-pub(crate) fn tracked_get_mem() -> u64 {
-    unsafe { bindings::vips_tracked_get_mem() }
-}
-
-pub(crate) fn tracked_get_mem_highwater() -> u64 {
-    unsafe { bindings::vips_tracked_get_mem_highwater() }
-}
-
-pub(crate) fn tracked_get_allocs() -> i32 {
-    unsafe { bindings::vips_tracked_get_allocs() }
-}
-
-pub(crate) fn pipe_read_limit_set(limit: i64) {
-    unsafe {
-        bindings::vips_pipe_read_limit_set(limit);
+    /*
+     * Get size of thread pool
+     */
+    pub fn get_concurrency() -> i32 {
+        unsafe { vips_concurrency_get() }
     }
 }
 
 pub(crate) fn init(name: &str, detect_leak: bool) -> Result<i32, String> {
     let cstring = new_c_string(name);
     if let Ok(c_name) = cstring {
-        let res = unsafe { bindings::vips_init(c_name.as_ptr()) };
+        let res = unsafe { vips_init(c_name.as_ptr()) };
         let result = if res == 0 {
             Ok(res)
         } else {
@@ -180,7 +144,7 @@ pub(crate) fn init(name: &str, detect_leak: bool) -> Result<i32, String> {
         };
         unsafe {
             if detect_leak {
-                bindings::vips_leak_set(1);
+                vips_leak_set(1);
             };
         }
         result

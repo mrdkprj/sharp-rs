@@ -1,10 +1,11 @@
 use crate::{
-    common::{get_alpha_image, image_from_getpoint, is16_bit, remove_alpha, scalar_image_like, scale_image, stay_sequential},
+    common::{is16_bit, remove_alpha, stay_sequential},
     input::Raw,
     Colour,
 };
 use libvips::{
     error::Error::OperationError,
+    operator::{Ge, Lt, MyIndex},
     ops::{BandFormat, Extend, Interpretation, Kernel, OperationBoolean, OperationMorphology, OperationRelational, Precision},
     v_value,
     voption::{VOption, V_Value},
@@ -190,7 +191,6 @@ pub enum Fit {
     Inside,
     Outside,
 }
-
 pub struct Region {
     /** zero-indexed offset from left edge */
     pub left: u32,
@@ -227,28 +227,18 @@ pub enum Position {
  * Tint an image using the provided RGB.
  */
 pub(crate) fn tint(image: VipsImage, tint: &[f64]) -> Result<VipsImage> {
-    let black_img = VipsImage::black(1, 1)?;
-    let tint_img = image_from_getpoint(tint)?;
-    let tint_lab = black_img.add(&tint_img)?;
-    let tint_lab = tint_lab.colourspace_with_opts(Interpretation::Lab, VOption::new().with("source_space", v_value!(Interpretation::Srgb as i32)))?;
-    let point = tint_lab.getpoint(0, 0)?;
-    let tint_lab = image_from_getpoint(&point)?;
+    let tint_lab = (VipsImage::black(1, 1)? + tint).colourspace_with_opts(Interpretation::Lab, VOption::new().with("source_space", v_value!(Interpretation::Srgb as i32)))?.getpoint(0, 0)?;
 
     // LAB identity function
     let identity_lab = VipsImage::identity_with_opts(VOption::new().with("bands", v_value!(3)))?;
     let identity_lab = identity_lab.colourspace_with_opts(Interpretation::Lab, VOption::new().with("source_space", v_value!(Interpretation::Srgb as i32)))?;
 
     // Scale luminance range, 0.0 to 1.0
-    let l = identity_lab.divide(&scalar_image_like(&identity_lab, 100.0)?)?;
-    let weight_l = l.subtract(&scalar_image_like(&l, 0.5)?)?;
-    let weight_l = weight_l.multiply(&weight_l)?;
-    let weight_l = weight_l.multiply(&scalar_image_like(&weight_l, 4.0)?)?;
-    let weight_l = scalar_image_like(&weight_l, 1.0)?.subtract(&weight_l)?;
-
+    let l = identity_lab.at(0) / 100.0;
     // Weighting functions
-    let weight_ab = weight_l.multiply(&tint_lab)?;
-    let weight_ab = weight_ab.extract_band_with_opts(1, VOption::new().with("n", v_value!(2)))?;
-    let identity_lab = VipsImage::bandjoin(&[identity_lab, weight_ab])?;
+    let weight_l = 1.0 - 4.0 * ((&l - 0.5) * (&l - 0.5));
+    let weight_ab = (weight_l * tint_lab.as_slice()).extract_band_with_opts(1, VOption::new().with("n", v_value!(2)))?;
+    let identity_lab = identity_lab.at(0).bandjoin_with(&[weight_ab])?;
 
     // Convert lookup table to sRGB
     let lut = identity_lab.colourspace_with_opts(Interpretation::Srgb, VOption::new().with("source_space", v_value!(Interpretation::Lab as i32)))?;
@@ -261,10 +251,8 @@ pub(crate) fn tint(image: VipsImage, tint: &[f64]) -> Result<VipsImage> {
 
     // Apply lookup table
     let image = if image.image_hasalpha() {
-        let alpha = get_alpha_image(&image)?;
-        let image = remove_alpha(image)?;
-        let image = image.colourspace(Interpretation::BW)?.maplut(&lut)?.colourspace(type_before_tint)?;
-        VipsImage::bandjoin(&[image, alpha])?
+        let alpha = image.at(image.get_bands() - 1);
+        remove_alpha(image)?.colourspace(Interpretation::BW)?.maplut(&lut)?.colourspace(type_before_tint)?.bandjoin_with(&[alpha])?
     } else {
         image.colourspace(Interpretation::BW)?.maplut(&lut)?.colourspace(type_before_tint)?
     };
@@ -284,7 +272,7 @@ pub(crate) fn normalise(image: VipsImage, lower: f64, upper: f64) -> Result<Vips
     // Convert to LAB colourspace
     let lab = image.colourspace(Interpretation::Lab)?;
     // Extract luminance
-    let luminance = lab.extract_band(0)?;
+    let luminance = lab.at(0);
 
     // Find luminance range
     let min: f64 = if lower == 0.0 {
@@ -305,15 +293,13 @@ pub(crate) fn normalise(image: VipsImage, lower: f64, upper: f64) -> Result<Vips
         let f = 100.0 / (max - min);
         let a = -(min * f);
         // Scale luminance, join to chroma, convert back to original colourspace
-        let normalized = linear(luminance, &[f], &[a])?;
-        let normalized = VipsImage::bandjoin(&[normalized, chroma])?;
-        let normalized = normalized.colourspace(type_before_normalize)?;
+        let normalized = luminance.linear(&[f], &[a])?.bandjoin_with(&[chroma])?.colourspace(type_before_normalize)?;
         // Attach original alpha channel, if any
         if image.image_hasalpha() {
             // Extract original alpha channel
-            let alpha = get_alpha_image(&image)?;
+            let alpha = image.at(image.get_bands() - 1);
             // Join alpha channel to normalised image
-            return VipsImage::bandjoin(&[normalized, alpha]);
+            return normalized.bandjoin_with(&[alpha]);
         } else {
             return Ok(normalized);
         }
@@ -335,10 +321,8 @@ pub(crate) fn clahe(image: VipsImage, width: i32, height: i32, max_slope: i32) -
 pub(crate) fn gamma(image: VipsImage, exponent: f64) -> Result<VipsImage> {
     if image.image_hasalpha() {
         // Separate alpha channel
-        let alpha = get_alpha_image(&image)?;
-        let image = remove_alpha(image)?;
-        let image = image.gamma_with_opts(VOption::new().with("exponent", v_value!(exponent)))?;
-        VipsImage::bandjoin(&[image, alpha])
+        let alpha = image.at(image.get_bands() - 1);
+        remove_alpha(image)?.gamma_with_opts(VOption::new().with("exponent", v_value!(exponent)))?.bandjoin_with(&[alpha])
     } else {
         image.gamma_with_opts(VOption::new().with("exponent", v_value!(exponent)))
     }
@@ -364,10 +348,8 @@ pub(crate) fn flatten(image: VipsImage, flatten_background: &[f64]) -> Result<Vi
 pub(crate) fn negate(image: VipsImage, negate_alpha: bool) -> Result<VipsImage> {
     if image.image_hasalpha() && !negate_alpha {
         // Separate alpha channel
-        let alpha = get_alpha_image(&image)?;
-        let image = remove_alpha(image)?;
-        let image = image.invert()?;
-        VipsImage::bandjoin(&[image, alpha])
+        let alpha = image.at(image.get_bands() - 1);
+        remove_alpha(image)?.invert()?.bandjoin_with(&[alpha])
     } else {
         image.invert()
     }
@@ -379,13 +361,12 @@ pub(crate) fn negate(image: VipsImage, negate_alpha: bool) -> Result<VipsImage> 
 pub(crate) fn blur(image: VipsImage, sigma: f64, precision: Precision, min_ampl: f64) -> Result<VipsImage> {
     if sigma == -1.0 {
         // Fast, mild blur - averages neighbouring pixels
-        let blur = VipsImage::image_new_matrix_from_array(3, 3, &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])?;
-        let blur = blur.scale_with_opts(VOption::new().with("exp", v_value!(9.0)))?;
+        let blur = VipsImage::image_new_matrixv(3, 3, &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])?;
+        blur.set_double("scale", 9.0);
         image.conv(&blur)
     } else {
         // Slower, accurate Gaussian blur
-        let blur = stay_sequential(image, true)?;
-        blur.gaussblur_with_opts(sigma, VOption::new().with("precision", v_value!(precision as i32)).with("min_ampl", v_value!(min_ampl)))
+        stay_sequential(image, true)?.gaussblur_with_opts(sigma, VOption::new().with("precision", v_value!(precision as i32)).with("min_ampl", v_value!(min_ampl)))
     }
 }
 
@@ -395,13 +376,9 @@ pub(crate) fn blur(image: VipsImage, sigma: f64, precision: Precision, min_ampl:
 pub(crate) fn convolve(image: VipsImage, width: i32, height: i32, scale: f64, offset: f64, kernel_v: &[f64]) -> Result<VipsImage> {
     let bytes: &[u8] = unsafe { slice::from_raw_parts(kernel_v.as_ptr() as *const u8, std::mem::size_of_val(kernel_v)) };
     let kernel = VipsImage::new_from_memory(bytes, width, height, 1, BandFormat::Double)?;
-    let kernel = scale_image(kernel, scale)?;
-
-    // Convolve image with scaled kernel
-    let image = image.conv(&kernel)?;
-
-    // Add offset to the result
-    image.add(&scalar_image_like(&image, offset)?)
+    kernel.set_double("scale", scale);
+    kernel.set_double("offset", offset);
+    image.conv(&kernel)
 }
 
 /*
@@ -409,7 +386,6 @@ pub(crate) fn convolve(image: VipsImage, width: i32, height: i32, scale: f64, of
  * Eg. RGB will be a 3x3 matrix.
  */
 pub(crate) fn recomb(image: VipsImage, matrix: &[f64]) -> Result<VipsImage> {
-    let m = matrix;
     let image = image.colourspace(Interpretation::Srgb)?;
     if matrix.len() == 9 {
         let m = if image.get_bands() == 3 {
@@ -419,7 +395,7 @@ pub(crate) fn recomb(image: VipsImage, matrix: &[f64]) -> Result<VipsImage> {
         };
         image.recomb(&m)
     } else {
-        image.recomb(&VipsImage::image_new_matrix_from_array(4, 4, m)?)
+        image.recomb(&VipsImage::image_new_matrix_from_array(4, 4, matrix)?)
     }
 }
 
@@ -427,10 +403,8 @@ pub(crate) fn modulate(image: VipsImage, brightness: f64, saturation: f64, hue: 
     let colourspace_before_modulate = image.get_interpretation()?;
     if image.image_hasalpha() {
         // Separate alpha channel
-        let alpha = get_alpha_image(&image)?;
-        let image = remove_alpha(image)?;
-        let image = image.colourspace(Interpretation::Lch)?.linear(&[brightness, saturation, 1.0], &[lightness, 0.0, hue as _])?.colourspace(colourspace_before_modulate)?;
-        VipsImage::bandjoin(&[image, alpha])
+        let alpha = image.at(image.get_bands() - 1);
+        remove_alpha(image)?.colourspace(Interpretation::Lch)?.linear(&[brightness, saturation, 1.0], &[lightness, 0.0, hue as _])?.colourspace(colourspace_before_modulate)?.bandjoin_with(&[alpha])
     } else {
         image.colourspace(Interpretation::Lch)?.linear(&[brightness, saturation, 1.0], &[lightness, 0.0, hue as _])?.colourspace(colourspace_before_modulate)
     }
@@ -439,11 +413,11 @@ pub(crate) fn modulate(image: VipsImage, brightness: f64, saturation: f64, hue: 
 /*
  * Sharpen flat and jagged areas. Use sigma of -1.0 for fast sharpen.
  */
-pub(crate) fn sharpen(image: VipsImage, sigma: f64, m_1: f64, m_2: f64, x_1: f64, y_2: f64, y_3: f64) -> Result<VipsImage> {
+pub(crate) fn sharpen(image: VipsImage, sigma: f64, m1: f64, m2: f64, x1: f64, y2: f64, y3: f64) -> Result<VipsImage> {
     if sigma == -1.0 {
         // Fast, mild sharpen
         let sharpen = VipsImage::image_new_matrix_from_array(3, 3, &[-1.0, -1.0, -1.0, -1.0, 32.0, -1.0, -1.0, -1.0, -1.0])?;
-        let sharpen = scale_image(sharpen, 24.0)?;
+        sharpen.set_double("scale", 24.0);
         image.conv(&sharpen)
     } else {
         // Slow, accurate sharpen in LAB colour space, with control over flat vs jagged areas
@@ -451,10 +425,9 @@ pub(crate) fn sharpen(image: VipsImage, sigma: f64, m_1: f64, m_2: f64, x_1: f64
         if colourspace_before_sharpen == Interpretation::Rgb {
             colourspace_before_sharpen = Interpretation::Srgb;
         }
-
         image
             .sharpen_with_opts(
-                VOption::new().with("sigma", v_value!(sigma)).with("m_1", v_value!(m_1)).with("m_2", v_value!(m_2)).with("x_1", v_value!(x_1)).with("y_2", v_value!(y_2)).with("y_3", v_value!(y_3)),
+                VOption::new().with("sigma", v_value!(sigma)).with("m1", v_value!(m1)).with("m2", v_value!(m2)).with("x1", v_value!(x1)).with("y2", v_value!(y2)).with("y3", v_value!(y3)),
             )?
             .colourspace(colourspace_before_sharpen)
     }
@@ -462,7 +435,7 @@ pub(crate) fn sharpen(image: VipsImage, sigma: f64, m_1: f64, m_2: f64, x_1: f64
 
 pub(crate) fn threshold(image: VipsImage, threshold: f64, threshold_grayscale: bool) -> Result<VipsImage> {
     if !threshold_grayscale {
-        image.relational_const(OperationRelational::Moreeq, &[threshold])
+        Ok(image.ge(threshold))
     } else {
         image.colourspace(Interpretation::BW)?.relational_const(OperationRelational::Moreeq, &[threshold])
     }
@@ -471,8 +444,9 @@ pub(crate) fn threshold(image: VipsImage, threshold: f64, threshold_grayscale: b
 /*
   Perform boolean/bitwise operation on image color channels - results in one channel image
 */
-pub(crate) fn bandbool(image: VipsImage, boolean: OperationBoolean) -> Result<VipsImage> {
-    image.bandbool(boolean)?.copy_with_opts(VOption::new().with("interpretation", v_value!(Interpretation::BW as i32)))
+pub(crate) fn bandbool(mut image: VipsImage, boolean: OperationBoolean) -> Result<VipsImage> {
+    image = image.bandbool(boolean)?;
+    image.copy_with_opts(VOption::new().with("interpretation", v_value!(Interpretation::BW as i32)))
 }
 
 /*
@@ -494,8 +468,7 @@ pub(crate) fn trim(image: VipsImage, background: &[f64], threshold: f64, line_ar
     let mut threshold = threshold;
     if background.is_empty() {
         // Top-left pixel provides the default background colour if none is given
-        let one_pixel = image.extract_area(0, 0, 1, 1)?;
-        background = one_pixel.getpoint(0, 0)?
+        background = image.extract_area(0, 0, 1, 1)?.getpoint(0, 0)?;
     } else if is16_bit(image.get_interpretation()?) {
         for color in &mut background {
             *color *= 256.0;
@@ -516,7 +489,7 @@ pub(crate) fn trim(image: VipsImage, background: &[f64], threshold: f64, line_ar
 
     if image.image_hasalpha() {
         // Search alpha channel (A)
-        let alpha = get_alpha_image(&image)?;
+        let alpha = image.at(image.get_bands() - 1);
         let (left_a, top_a, width_a, height_a) =
             alpha.find_trim_with_opts(VOption::new().with("background", v_value!(vec![background_alpha].as_slice())).with("line_art", v_value!(line_art)).with("threshold", v_value!(threshold)))?;
 
@@ -554,9 +527,8 @@ pub(crate) fn linear(image: VipsImage, a: &[f64], b: &[f64]) -> Result<VipsImage
     let uchar = !is16_bit(image.get_interpretation()?);
     if image.image_hasalpha() && a.len() != bands && (a.len() == 1 || a.len() == bands - 1 || bands - 1 == 1) {
         // Separate alpha channel
-        let alpha = get_alpha_image(&image)?;
-        let image = remove_alpha(image)?.linear_with_opts(a, b, VOption::new().with("uchar", v_value!(uchar)))?;
-        VipsImage::bandjoin(&[image, alpha])
+        let alpha = image.at(image.get_bands() - 1);
+        remove_alpha(image)?.linear_with_opts(a, b, VOption::new().with("uchar", v_value!(uchar)))?.bandjoin_with(&[alpha])
     } else {
         image.linear_with_opts(a, b, VOption::new().with("uchar", v_value!(uchar)))
     }
@@ -567,15 +539,11 @@ pub(crate) fn linear(image: VipsImage, a: &[f64], b: &[f64]) -> Result<VipsImage
  */
 pub(crate) fn unflatten(image: VipsImage) -> Result<VipsImage> {
     if image.image_hasalpha() {
-        let alpha = get_alpha_image(&image)?;
+        let alpha = image.at(image.get_bands() - 1);
         let no_alpha = remove_alpha(image)?;
-        let gray = no_alpha.colourspace(Interpretation::BW)?;
-        let mask = gray.relational_const(OperationRelational::Less, &[255.0])?;
-        let new_alpha = alpha.boolean(&mask, OperationBoolean::And)?;
-        VipsImage::bandjoin(&[no_alpha, new_alpha])
+        no_alpha.bandjoin_with(&[alpha & (no_alpha.colourspace(Interpretation::BW)?.lt(255.0))])
     } else {
-        let gray = image.colourspace(Interpretation::BW)?;
-        VipsImage::bandjoin(&[image, gray])
+        image.colourspace(Interpretation::BW)?.bandjoin_with(&[image.colourspace(Interpretation::BW)?.lt(255.0)])
     }
 }
 

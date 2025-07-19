@@ -1,8 +1,8 @@
 use crate::{
     common::{
-        apply_alpha, assert_image_type_dimensions, calculate_crop, calculate_crop2, calculate_embed_position, ensure_alpha, exif_orientation, get_g_type, get_profile, has_profile, image_type_id,
-        is16_bit, is_dz, is_dz_zip, is_gif, is_heif, is_jp2, is_jpeg, is_jxl, is_png, is_tiff, is_v, is_webp, remove_alpha, remove_animation_properties, remove_exif, remove_exif_orientation,
-        remove_gif_palette, resolve_shrink, set_animation_properties, set_density, set_exif_orientation, set_profile, set_timeout, stay_sequential, Canvas, ImageType, InputDescriptor,
+        apply_alpha, assert_image_type_dimensions, calculate_crop, calculate_crop2, calculate_embed_position, ensure_alpha, exif_orientation, get_profile, has_profile, image_type_id, is16_bit, is_dz,
+        is_dz_zip, is_gif, is_heif, is_jp2, is_jpeg, is_jxl, is_png, is_tiff, is_v, is_webp, remove_alpha, remove_animation_properties, remove_exif, remove_exif_orientation, remove_gif_palette,
+        resolve_shrink, set_animation_properties, set_density, set_exif_orientation, set_profile, set_timeout, stay_sequential, Canvas, ImageType, InputDescriptor,
     },
     input::open_input,
     operation::{
@@ -18,6 +18,7 @@ use libvips::{
         Angle, BandFormat, BlendMode, Direction, Extend, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignPngFilter, ForeignSubsample, ForeignTiffCompression,
         ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset, Intent, Interesting, Interpretation, Kernel, OperationBoolean, Precision,
     },
+    utils::{get_g_type, G_TYPE_INT},
     v_value,
     voption::{VOption, V_Value},
     Result, VipsImage, VipsInterpolate,
@@ -1505,7 +1506,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
 
     image = set_animation_properties(image, n_pages, target_page_height, &baton.delay, baton.loop_)?;
 
-    if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type("gint") {
+    if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
         baton.page_height_out = image.get_int(VIPS_META_PAGE_HEIGHT)?;
         baton.pages_out = image.get_int(VIPS_META_N_PAGES)?;
     }
