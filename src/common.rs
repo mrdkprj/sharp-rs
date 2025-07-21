@@ -1,3 +1,4 @@
+use crate::util::new_c_string;
 use libvips::{
     bindings::{
         g_signal_connect_data, vips_blob_get_type, vips_error, vips_foreign_find_load, vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map, vips_image_set_kill,
@@ -14,8 +15,6 @@ use std::{
     ffi::{c_char, c_int, c_void, CStr, CString},
     sync::OnceLock,
 };
-
-use crate::util::new_c_string;
 
 #[derive(Debug, Clone)]
 pub(crate) struct InputDescriptor {

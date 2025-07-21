@@ -6,12 +6,11 @@ use crate::{
 use libvips::{
     error::Error::OperationError,
     operator::{Ge, Lt, MyIndex},
-    ops::{BandFormat, Extend, Interpretation, Kernel, OperationBoolean, OperationMorphology, OperationRelational, Precision},
+    ops::{BandFormat, Extend, Interpretation, OperationBoolean, OperationMorphology, OperationRelational, Precision},
     v_value,
     voption::{VOption, V_Value},
     Result, VipsImage,
 };
-use num_derive::{FromPrimitive, ToPrimitive};
 use std::slice;
 use strum_macros::Display;
 
@@ -143,84 +142,6 @@ pub struct ModulateOptions {
     pub saturation: Option<f64>,
     pub hue: Option<i32>,
     pub lightness: Option<f64>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct ResizeOptions {
-    /** Alternative means of specifying width. If both are present self takes priority. */
-    pub width: Option<i32>,
-    /** Alternative means of specifying height. If both are present self takes priority. */
-    pub height: Option<i32>,
-    /** How the image should be resized to fit both provided dimensions, one of cover, contain, fill, inside or outside. (optional, default "cover") */
-    pub fit: Option<Fit>,
-    /** Position, gravity or strategy to use when fit is cover or contain. (optional, default "centre") */
-    pub position: Option<Position>,
-    /** Background colour when using a fit of contain, parsed by the color module, defaults to black without transparency. (optional, default {r:0,g:0,b:0,alpha:1}) */
-    pub background: Option<Colour>,
-    /** The kernel to use for image reduction. (optional, default "lanczos3") */
-    pub kernel: Option<Kernel>,
-    /** Do not enlarge if the width or height are already less than the specified dimensions, equivalent to GraphicsMagick"s > geometry option. (optional, default false) */
-    pub without_enlargement: Option<bool>,
-    /** Do not reduce if the width or height are already greater than the specified dimensions, equivalent to GraphicsMagick"s < geometry option. (optional, default false) */
-    pub without_reduction: Option<bool>,
-    /** Take greater advantage of the JPEG and WebP shrink-on-load feature, which can lead to a slight moiré pattern on some images. (optional, default true) */
-    pub fast_shrink_on_load: Option<bool>,
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct ExtendOptions {
-    /** single pixel count to top edge (optional, default 0) */
-    pub top: Option<i32>,
-    /** single pixel count to left edge (optional, default 0) */
-    pub left: Option<i32>,
-    /** single pixel count to bottom edge (optional, default 0) */
-    pub bottom: Option<i32>,
-    /** single pixel count to right edge (optional, default 0) */
-    pub right: Option<i32>,
-    /** background colour, parsed by the color module, defaults to black without transparency. (optional, default {r:0,g:0,b:0,alpha:1}) */
-    pub background: Option<Colour>,
-    /** how the extension is done, one of: "background", "copy", "repeat", "mirror" (optional, default `'background'`) */
-    pub extend_with: Option<Extend>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Fit {
-    Contain,
-    Cover,
-    Fill,
-    Inside,
-    Outside,
-}
-pub struct Region {
-    /** zero-indexed offset from left edge */
-    pub left: u32,
-    /** zero-indexed offset from top edge */
-    pub top: u32,
-    /** dimension of extracted image */
-    pub width: u32,
-    /** dimension of extracted image */
-    pub height: u32,
-}
-
-pub struct TrimOptions {
-    /** Background colour, parsed by the color module, defaults to that of the top-left pixel. (optional) */
-    pub background: Option<Colour>,
-    /** Allowed difference from the above colour, a positive number. (optional, default 10) */
-    pub threshold: Option<f64>,
-    /** Does the input more closely resemble line art (e.g. vector) rather than being photographic? (optional, default false) */
-    pub line_art: Option<bool>,
-}
-
-#[derive(Debug, Clone, FromPrimitive, ToPrimitive)]
-pub enum Position {
-    Top = 1,
-    Right = 2,
-    Bottom = 3,
-    Left = 4,
-    RightTop = 5,
-    RightBottom = 6,
-    LeftBottom = 7,
-    LeftTop = 8,
 }
 
 /*

@@ -2,10 +2,7 @@ use crate::{
     common::{determine_image_type, determine_image_type_from_str, image_type_id},
     Sharp,
 };
-use libvips::bindings::{
-    vips_cache_get_max, vips_cache_get_max_files, vips_cache_get_max_mem, vips_cache_get_size, vips_cache_set_max, vips_cache_set_max_files, vips_cache_set_max_mem, vips_concurrency_get,
-    vips_concurrency_set, vips_error_clear, vips_init, vips_leak_set, vips_thread_shutdown, vips_tracked_get_files, vips_tracked_get_mem, vips_tracked_get_mem_highwater,
-};
+use libvips::Vips;
 use std::ffi::CString;
 
 #[derive(Debug, Clone, Default)]
@@ -92,64 +89,42 @@ impl Sharp {
      * @returns {Object}
      */
     pub fn set_cache(memory: u64, files: i32, items: i32) -> CacheResult {
-        unsafe {
-            // Set memory limit
-            vips_cache_set_max_mem(memory);
-            // Set file limit
-            vips_cache_set_max_files(files);
-            // Set items limit
-            vips_cache_set_max(items);
+        // Set memory limit
+        Vips::cache_set_max_mem(memory);
+        // Set file limit
+        Vips::cache_set_max_files(files);
+        // Set items limit
+        Vips::cache_set_max(items);
 
-            let mut result = CacheResult::default();
-            // Get memory stats
-            result.memory.current = vips_tracked_get_mem() / 1048576;
-            result.memory.high = vips_tracked_get_mem_highwater() / 1048576;
-            result.memory.max = vips_cache_get_max_mem() / 1048576;
+        let mut result = CacheResult::default();
+        // Get memory stats
+        result.memory.current = Vips::tracked_get_mem() / 1048576;
+        result.memory.high = Vips::tracked_get_mem_highwater() / 1048576;
+        result.memory.max = Vips::cache_get_max_mem() / 1048576;
 
-            // Get file stats
-            result.files.current = vips_tracked_get_files();
-            result.files.max = vips_cache_get_max_files();
+        // Get file stats
+        result.files.current = Vips::tracked_get_files();
+        result.files.max = Vips::cache_get_max_files();
 
-            // Get item stats
-            result.items.current = vips_cache_get_size();
-            result.items.max = vips_cache_get_max();
+        // Get item stats
+        result.items.current = Vips::cache_get_size();
+        result.items.max = Vips::cache_get_max();
 
-            result
-        }
+        result
     }
 
     /*
      * Set size of thread pool
      */
     pub fn set_concurrency(max: i32) {
-        unsafe { vips_concurrency_set(max) };
+        Vips::concurrency_set(max)
     }
 
     /*
      * Get size of thread pool
      */
     pub fn get_concurrency() -> i32 {
-        unsafe { vips_concurrency_get() }
-    }
-}
-
-pub(crate) fn init(name: &str, detect_leak: bool) -> Result<i32, String> {
-    let cstring = new_c_string(name);
-    if let Ok(c_name) = cstring {
-        let res = unsafe { vips_init(c_name.as_ptr()) };
-        let result = if res == 0 {
-            Ok(res)
-        } else {
-            Err("Failed to init libvips".to_string())
-        };
-        unsafe {
-            if detect_leak {
-                vips_leak_set(1);
-            };
-        }
-        result
-    } else {
-        Err("Failed to convert rust string to C string".to_string())
+        Vips::concurrency_get()
     }
 }
 
@@ -162,9 +137,7 @@ pub(crate) struct VipsGuard;
 
 impl Drop for VipsGuard {
     fn drop(&mut self) {
-        unsafe {
-            vips_error_clear();
-            vips_thread_shutdown();
-        };
+        Vips::error_clear();
+        Vips::thread_shutdown();
     }
 }
