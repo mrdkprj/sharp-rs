@@ -5,8 +5,8 @@ use crate::{
 use common::{rgba_from_hex, InputDescriptor};
 use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
 pub use libvips::operations::{
-    BandFormat, BlendMode, Extend, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
-    Interpretation, Kernel, OperationBoolean,
+    BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit,
+    ForeignWebpPreset, Interpretation, Kernel, OperationBoolean,
 };
 use libvips::Vips;
 use std::path::Path;

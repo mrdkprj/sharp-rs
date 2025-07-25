@@ -14,7 +14,6 @@ fn simple() {
         },
     )
     .unwrap()
-    .to_colourspace(Interpretation)
     .with_metadata(None)
     .unwrap()
     .resize(800, 800)
