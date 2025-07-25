@@ -3,11 +3,12 @@ use sharp::{
     input::{Create, CreateRaw, CreateText, Noise, SharpOptions},
     FailOn, Sharp,
 };
+use std::path::Path;
 
 #[test]
 fn simple() {
     Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img.jpg"),
         SharpOptions {
             fail_on: Some(FailOn::None),
             ..Default::default()
@@ -24,17 +25,17 @@ fn simple() {
     .unwrap()
     .jpeg(None)
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img2.jpg"))
+    .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img2.jpg"))
     .unwrap();
 }
 
 #[test]
 fn overwrite() {
-    let src = concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg");
-    let dest = concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img_rot.jpg");
-    std::fs::copy(src, dest).unwrap();
-    let x = Sharp::new_from_file(dest).unwrap().with_metadata(None).unwrap().rotate(180, None).unwrap().to_buffer().unwrap();
-    std::fs::write(dest, x).unwrap();
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img.jpg");
+    let dest = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img_rot.jpg");
+    std::fs::copy(&src, &dest).unwrap();
+    let x = Sharp::new_from_file(&dest).unwrap().with_metadata(None).unwrap().rotate(180, None).unwrap().to_buffer().unwrap();
+    std::fs::write(&dest, x).unwrap();
 }
 
 // Create a blank 300x200 PNG image of semi-translucent red pixels
@@ -54,7 +55,7 @@ fn create() {
     .unwrap()
     .png(None)
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img2.png"))
+    .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img2.png"))
     .unwrap();
 }
 
@@ -62,14 +63,14 @@ fn create() {
 #[test]
 fn gif() {
     Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\sample.gif"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("sample.gif"),
         SharpOptions {
             animated: Some(true),
             ..Default::default()
         },
     )
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\file_out.webp"))
+    .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("file_out.webp"))
     .unwrap();
 }
 
@@ -89,7 +90,7 @@ fn buf() {
         },
     )
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\my-two-pixels.png"))
+    .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("my-two-pixels.png"))
     .unwrap();
 }
 
@@ -111,7 +112,7 @@ fn rgb() {
         ..Default::default()
     })
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\noise.png"))
+    .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("noise.png"))
     .unwrap();
 }
 
@@ -128,7 +129,7 @@ fn text() {
         ..Default::default()
     })
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\text_bw.png"))
+    .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("text_bw.png"))
     .unwrap();
 }
 
@@ -146,14 +147,14 @@ fn text_rgba() {
         ..Default::default()
     })
     .unwrap()
-    .to_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\text_rgba.png"))
+    .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("text_rgba.png"))
     .unwrap();
 }
 
 #[test]
 fn metadata() {
     let _ = Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img.jpg"),
         SharpOptions {
             fail_on: Some(FailOn::None),
             ..Default::default()
@@ -164,7 +165,7 @@ fn metadata() {
     .unwrap();
     println!("done3");
     let data = Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img.jpg"),
         SharpOptions {
             fail_on: Some(FailOn::None),
             ..Default::default()
@@ -179,20 +180,20 @@ fn metadata() {
 #[test]
 fn icon() {
     Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.png"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("icon.png"),
         SharpOptions {
             fail_on: Some(FailOn::None),
             ..Default::default()
         },
     )
     .unwrap()
-    .to_icon(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.ico"), None)
+    .to_icon(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("icon.ico"), None)
     .unwrap();
 }
 
 #[test]
 fn icon_meta() {
-    let x = Sharp::from_icon_file(concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\icon.ico")).unwrap().metadata().unwrap();
+    let x = Sharp::from_icon_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("icon.ico")).unwrap().metadata().unwrap();
     println!("icon:{:?}", x);
 }
 
@@ -200,7 +201,7 @@ fn icon_meta() {
 fn stat() {
     Sharp::cache(true);
     let x = Sharp::new_from_file_with_opts(
-        concat!(env!("CARGO_MANIFEST_DIR"), r"\tests\img\img.jpg"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("img.jpg"),
         SharpOptions {
             fail_on: Some(FailOn::None),
             ..Default::default()
