@@ -5,8 +5,8 @@ use crate::{
 };
 use libvips::{
     bindings::vips_interpretation_max_alpha,
+    operations::{Access, Interpretation},
     operator::MyIndex,
-    ops::{Access, Interpretation},
     v_value,
     voption::{VOption, V_Value},
     Result, VipsImage,
@@ -100,7 +100,7 @@ impl Sharp {
 
         // Estimate sharpness via standard deviation of greyscale laplacian
         if image.get_width() > 1 || image.get_height() > 1 {
-            let laplacian = VipsImage::image_new_matrixv(3, 3, &[0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0])?;
+            let laplacian = VipsImage::new_matrixv(3, 3, &[0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0])?;
             laplacian.set_double("scale", 9.0);
             stats.sharpness = greyscale.conv(&laplacian)?.deviate()?;
         }

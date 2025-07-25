@@ -5,8 +5,8 @@ use crate::{
 };
 use libvips::{
     error::Error::OperationError,
+    operations::{BandFormat, Extend, Interpretation, OperationBoolean, OperationMorphology, OperationRelational, Precision},
     operator::{Ge, Lt, MyIndex},
-    ops::{BandFormat, Extend, Interpretation, OperationBoolean, OperationMorphology, OperationRelational, Precision},
     v_value,
     voption::{VOption, V_Value},
     Result, VipsImage,
@@ -282,7 +282,7 @@ pub(crate) fn negate(image: VipsImage, negate_alpha: bool) -> Result<VipsImage> 
 pub(crate) fn blur(image: VipsImage, sigma: f64, precision: Precision, min_ampl: f64) -> Result<VipsImage> {
     if sigma == -1.0 {
         // Fast, mild blur - averages neighbouring pixels
-        let blur = VipsImage::image_new_matrixv(3, 3, &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])?;
+        let blur = VipsImage::new_matrixv(3, 3, &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])?;
         blur.set_double("scale", 9.0);
         image.conv(&blur)
     } else {
@@ -310,13 +310,13 @@ pub(crate) fn recomb(image: VipsImage, matrix: &[f64]) -> Result<VipsImage> {
     let image = image.colourspace(Interpretation::Srgb)?;
     if matrix.len() == 9 {
         let m = if image.get_bands() == 3 {
-            VipsImage::image_new_matrix_from_array(3, 3, matrix)?
+            VipsImage::new_matrix_from_array(3, 3, matrix)?
         } else {
-            VipsImage::image_new_matrix_from_array(4, 4, &[matrix[0], matrix[1], matrix[2], 0.0, matrix[3], matrix[4], matrix[5], 0.0, matrix[6], matrix[7], matrix[8], 0.0, 0.0, 0.0, 0.0, 1.0])?
+            VipsImage::new_matrix_from_array(4, 4, &[matrix[0], matrix[1], matrix[2], 0.0, matrix[3], matrix[4], matrix[5], 0.0, matrix[6], matrix[7], matrix[8], 0.0, 0.0, 0.0, 0.0, 1.0])?
         };
         image.recomb(&m)
     } else {
-        image.recomb(&VipsImage::image_new_matrix_from_array(4, 4, matrix)?)
+        image.recomb(&VipsImage::new_matrix_from_array(4, 4, matrix)?)
     }
 }
 
@@ -337,7 +337,7 @@ pub(crate) fn modulate(image: VipsImage, brightness: f64, saturation: f64, hue: 
 pub(crate) fn sharpen(image: VipsImage, sigma: f64, m1: f64, m2: f64, x1: f64, y2: f64, y3: f64) -> Result<VipsImage> {
     if sigma == -1.0 {
         // Fast, mild sharpen
-        let sharpen = VipsImage::image_new_matrix_from_array(3, 3, &[-1.0, -1.0, -1.0, -1.0, 32.0, -1.0, -1.0, -1.0, -1.0])?;
+        let sharpen = VipsImage::new_matrix_from_array(3, 3, &[-1.0, -1.0, -1.0, -1.0, 32.0, -1.0, -1.0, -1.0, -1.0])?;
         sharpen.set_double("scale", 24.0);
         image.conv(&sharpen)
     } else {
@@ -562,7 +562,7 @@ pub(crate) fn embed_multi_page(image: VipsImage, left: i32, top: i32, width: i32
  */
 pub(crate) fn dilate(image: VipsImage, width: i32) -> Result<VipsImage> {
     let mask_width = 2 * width + 1;
-    let mask = VipsImage::image_new_matrix(mask_width, mask_width)?;
+    let mask = VipsImage::new_matrix(mask_width, mask_width)?;
     image.morph(&mask, OperationMorphology::Dilate)?.invert()
 }
 
@@ -571,6 +571,6 @@ pub(crate) fn dilate(image: VipsImage, width: i32) -> Result<VipsImage> {
  */
 pub(crate) fn erode(image: VipsImage, width: i32) -> Result<VipsImage> {
     let mask_width = 2 * width + 1;
-    let mask = VipsImage::image_new_matrix(mask_width, mask_width)?;
+    let mask = VipsImage::new_matrix(mask_width, mask_width)?;
     image.morph(&mask, OperationMorphology::Erode)?.invert()
 }

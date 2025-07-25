@@ -14,7 +14,7 @@ use crate::{
 use libvips::{
     bindings::{VipsForeignKeep_VIPS_FOREIGN_KEEP_EXIF, VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC, VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT},
     error::Error::{OperationError, OperationErrorExt},
-    ops::{
+    operations::{
         Angle, BandFormat, BlendMode, Direction, Extend, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignPngFilter, ForeignSubsample, ForeignTiffCompression,
         ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset, Intent, Interesting, Interpretation, Kernel, OperationBoolean, Precision,
     },

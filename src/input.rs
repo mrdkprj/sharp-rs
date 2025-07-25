@@ -5,7 +5,7 @@ use crate::{
 use libvips::{
     bindings::vips_band_format_is8bit,
     error::Error::{OperationError, OperationErrorExt},
-    ops::{Align, BandFormat, FailOn, Interpretation, TextWrap},
+    operations::{Align, BandFormat, FailOn, Interpretation, TextWrap},
     v_value,
     voption::{VOption, V_Value},
     Result, VipsImage,
@@ -384,7 +384,7 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
                 background.push(descriptor.create_background[3]);
             }
 
-            let image = VipsImage::image_new_matrix(descriptor.create_width, descriptor.create_height)?;
+            let image = VipsImage::new_matrix(descriptor.create_width, descriptor.create_height)?;
             let interpretation = if channels < 3 {
                 Interpretation::BW
             } else {

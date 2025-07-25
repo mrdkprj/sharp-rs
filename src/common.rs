@@ -5,7 +5,7 @@ use libvips::{
         vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc, GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT, VIPS_META_SEQUENTIAL,
     },
     error::Error::OperationError,
-    ops::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
+    operations::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
     utils::{get_g_type, G_TYPE_INT},
     voption::{VOption, VipsValue},
     Result, VipsImage,
@@ -768,7 +768,7 @@ pub(crate) fn get_rgba_as_colourspace(rgba: Vec<f64>, interpretation: Interpreta
     if bands < 3 {
         return Ok(rgba);
     }
-    let pixel = VipsImage::image_new_matrix(1, 1)?;
+    let pixel = VipsImage::new_matrix(1, 1)?;
     pixel.set_int("bands", bands as _);
     let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(interpretation, VOption::new().with("source_space", VipsValue::Int(Interpretation::Srgb as _)))?;
 
