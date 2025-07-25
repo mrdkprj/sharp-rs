@@ -7,7 +7,7 @@ use libvips::{
     error::Error::{OperationError, OperationErrorExt},
     operations::{Align, BandFormat, FailOn, Interpretation, TextWrap},
     v_value,
-    voption::{VOption, V_Value},
+    voption::VOption,
     Result, VipsImage,
 };
 

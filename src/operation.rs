@@ -8,7 +8,7 @@ use libvips::{
     operations::{BandFormat, Extend, Interpretation, OperationBoolean, OperationMorphology, OperationRelational, Precision},
     operator::{Ge, Lt, MyIndex},
     v_value,
-    voption::{VOption, V_Value},
+    voption::VOption,
     Result, VipsImage,
 };
 use std::slice;

@@ -8,7 +8,7 @@ use libvips::{
     operations::{Access, Interpretation},
     operator::MyIndex,
     v_value,
-    voption::{VOption, V_Value},
+    voption::VOption,
     Result, VipsImage,
 };
 

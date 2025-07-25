@@ -20,7 +20,7 @@ use libvips::{
     },
     utils::{get_g_type, G_TYPE_INT},
     v_value,
-    voption::{VOption, V_Value},
+    voption::VOption,
     Result, VipsImage, VipsInterpolate,
 };
 use std::collections::HashMap;
