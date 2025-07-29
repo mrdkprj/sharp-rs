@@ -9,7 +9,7 @@ name = "sharp"
 path = "src/lib.rs"
 
 [dependencies]
-libvips = { git = "https://github.com/mrdkprj/libvips-rs-msvc.git", rev="0797a6fea8bc510d7bdd56e54bbb8fc68f0bb209" }
+libvips = { git = "https://github.com/mrdkprj/libvips-rs-msvc.git", rev="432b155545ca403afd442cb43962e4f1c31befee" }
 serde = { version = "1.0", features = ["derive"] }
 num-traits = "0.2"
 num-derive = "0.4"

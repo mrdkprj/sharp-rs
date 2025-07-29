@@ -5,7 +5,7 @@ use libvips::{
         vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc, GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT, VIPS_META_SEQUENTIAL,
     },
     error::Error::OperationError,
-    operations::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
+    ops::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
     utils::{get_g_type, G_TYPE_INT},
     voption::{VOption, VipsValue},
     Result, VipsImage,
@@ -911,6 +911,7 @@ pub(crate) fn resolve_shrink(width: i32, height: i32, target_width: i32, target_
 */
 pub(crate) fn stay_sequential(image: VipsImage, condition: bool) -> Result<VipsImage> {
     if unsafe { vips_image_is_sequential(image.as_mut_ptr()) > 0 } && condition {
+        println!("here?");
         let copied_image = VipsImage::image_copy_memory(image)?.copy()?;
         copied_image.remove(VIPS_META_SEQUENTIAL);
         Ok(copied_image)

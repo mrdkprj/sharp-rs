@@ -5,8 +5,8 @@ use crate::{
 };
 use libvips::{
     bindings::vips_interpretation_max_alpha,
-    operations::{Access, Interpretation},
     operator::MyIndex,
+    ops::{Access, Interpretation},
     v_value,
     voption::VOption,
     Result, VipsImage,

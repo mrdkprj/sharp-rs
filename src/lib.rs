@@ -4,7 +4,7 @@ use crate::{
 };
 use common::{rgba_from_hex, InputDescriptor};
 use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
-pub use libvips::operations::{
+pub use libvips::ops::{
     BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit,
     ForeignWebpPreset, Interpretation, Kernel, OperationBoolean,
 };

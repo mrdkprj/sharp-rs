@@ -1,5 +1,5 @@
 use crate::{common::Canvas, in_range, Colour, InvalidParameterError, Sharp};
-use libvips::operations::{Extend, Kernel};
+use libvips::ops::{Extend, Kernel};
 use num_derive::{FromPrimitive, ToPrimitive};
 
 #[derive(Debug, Clone)]

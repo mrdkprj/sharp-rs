@@ -5,8 +5,8 @@ use crate::{
 };
 use libvips::{
     error::Error::OperationError,
-    operations::{BandFormat, Extend, Interpretation, OperationBoolean, OperationMorphology, OperationRelational, Precision},
     operator::{Ge, Lt, MyIndex},
+    ops::{BandFormat, Extend, Interpretation, OperationBoolean, OperationMorphology, OperationRelational, Precision},
     v_value,
     voption::VOption,
     Result, VipsImage,

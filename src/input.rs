@@ -5,7 +5,7 @@ use crate::{
 use libvips::{
     bindings::vips_band_format_is8bit,
     error::Error::{OperationError, OperationErrorExt},
-    operations::{Align, BandFormat, FailOn, Interpretation, TextWrap},
+    ops::{Align, BandFormat, FailOn, Interpretation, TextWrap},
     v_value,
     voption::VOption,
     Result, VipsImage,

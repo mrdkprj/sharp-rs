@@ -3,7 +3,7 @@ use crate::{
     pipeline::Composite,
     InvalidParameterError, Sharp,
 };
-use libvips::operations::BlendMode;
+use libvips::ops::BlendMode;
 
 pub struct OverlayOptions {
     input: Input,

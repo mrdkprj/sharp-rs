@@ -1,5 +1,5 @@
 use crate::{Colour, Sharp};
-pub use libvips::operations::Interpretation;
+pub use libvips::ops::Interpretation;
 
 impl Sharp {
     /**

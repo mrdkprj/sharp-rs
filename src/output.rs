@@ -3,9 +3,7 @@ use crate::{
     metadata::{get_metadata, Metadata},
     pipeline, Colour, InvalidParameterError, Sharp,
 };
-use libvips::operations::{
-    BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
-};
+use libvips::ops::{BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset};
 use num_derive::{FromPrimitive, ToPrimitive};
 use std::{collections::HashMap, path::Path};
 
