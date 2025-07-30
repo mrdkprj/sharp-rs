@@ -5,7 +5,7 @@ use crate::{
 };
 use libvips::{
     bindings::vips_interpretation_max_alpha,
-    operator::MyIndex,
+    operator::Index,
     ops::{Access, Interpretation},
     v_value,
     voption::VOption,
@@ -106,7 +106,7 @@ impl Sharp {
         }
 
         // Most dominant sRGB colour via 4096-bin 3D histogram
-        let hist = remove_alpha(image)?.colourspace(Interpretation::Srgb)?.hist_find_ndim_with_opts(VOption::new().with("bins", v_value!(16)))?;
+        let hist = remove_alpha(image)?.colourspace(Interpretation::Srgb)?.hist_find_ndim_with_opts(VOption::new().set("bins", v_value!(16)))?;
         let maxpos = hist.maxpos()?;
         let dx = maxpos.0;
         let dy = maxpos.1;

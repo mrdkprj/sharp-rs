@@ -549,7 +549,7 @@ pub(crate) fn get_density(image: &VipsImage) -> i32 {
 */
 pub(crate) fn set_density(image: VipsImage, density: f64) -> Result<VipsImage> {
     let pixels_per_mm = density / 25.4;
-    image.copy_with_opts(VOption::new().with("xres", VipsValue::Double(pixels_per_mm)).with("name", VipsValue::Double(pixels_per_mm)))
+    image.copy_with_opts(VOption::new().set("xres", VipsValue::Double(pixels_per_mm)).set("name", VipsValue::Double(pixels_per_mm)))
 }
 
 /*
@@ -770,7 +770,7 @@ pub(crate) fn get_rgba_as_colourspace(rgba: Vec<f64>, interpretation: Interpreta
     }
     let pixel = VipsImage::new_matrix(1, 1)?;
     pixel.set_int("bands", bands as _);
-    let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(interpretation, VOption::new().with("source_space", VipsValue::Int(Interpretation::Srgb as _)))?;
+    let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(interpretation, VOption::new().set("source_space", VipsValue::Int(Interpretation::Srgb as _)))?;
 
     if should_premultiply {
         let pixel = pixel.premultiply()?;
@@ -825,7 +825,7 @@ pub(crate) fn apply_alpha(image: VipsImage, colour: &[f64], should_premultiply: 
 pub(crate) fn remove_alpha(image: VipsImage) -> Result<VipsImage> {
     let mut image = image.copy()?;
     while image.get_bands() > 1 && image.image_hasalpha() {
-        image = image.extract_band_with_opts(0, VOption::new().with("n", VipsValue::Int(image.get_bands() - 1)))?;
+        image = image.extract_band_with_opts(0, VOption::new().set("n", VipsValue::Int(image.get_bands() - 1)))?;
     }
     Ok(image)
 }

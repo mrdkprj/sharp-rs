@@ -368,7 +368,7 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
                 bands.push(VipsImage::gaussnoise_with_opts(
                     descriptor.create_width,
                     descriptor.create_height,
-                    VOption::new().with("mean", v_value!(descriptor.create_noise_mean)).with("sigma", v_value!(descriptor.create_noise_sigma)),
+                    VOption::new().set("mean", v_value!(descriptor.create_noise_mean)).set("sigma", v_value!(descriptor.create_noise_sigma)),
                 )?);
             }
             let image = VipsImage::bandjoin(bands.as_mut_slice())?;
@@ -377,7 +377,7 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
             } else {
                 Interpretation::Srgb
             };
-            image.copy_with_opts(VOption::new().with("interpretation", v_value!(interpretation as i32)))?
+            image.copy_with_opts(VOption::new().set("interpretation", v_value!(interpretation as i32)))?
         } else {
             let mut background = vec![descriptor.create_background[0], descriptor.create_background[1], descriptor.create_background[2]];
             if channels == 4 {
@@ -390,7 +390,7 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
             } else {
                 Interpretation::Srgb
             };
-            let image = image.copy_with_opts(VOption::new().with("interpretation", v_value!(interpretation as i32)))?;
+            let image = image.copy_with_opts(VOption::new().set("interpretation", v_value!(interpretation as i32)))?;
             VipsImage::new_from_image(&image, &background)?
         };
 
@@ -400,34 +400,34 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
     } else if !descriptor.text_value.is_empty() {
         // Create a new image with text
         let mut text_options = VOption::new()
-            .with("align", v_value!(descriptor.text_align as i32))
-            .with("justify", v_value!(descriptor.text_justify))
-            .with("rgba", v_value!(descriptor.text_rgba))
-            .with("spacing", v_value!(descriptor.text_spacing))
-            .with("wrap", v_value!(descriptor.text_wrap as i32))
-            .with("autofit_dpi", v_value!(descriptor.text_autofit_dpi));
+            .set("align", v_value!(descriptor.text_align as i32))
+            .set("justify", v_value!(descriptor.text_justify))
+            .set("rgba", v_value!(descriptor.text_rgba))
+            .set("spacing", v_value!(descriptor.text_spacing))
+            .set("wrap", v_value!(descriptor.text_wrap as i32))
+            .set("autofit_dpi", v_value!(descriptor.text_autofit_dpi));
 
         if descriptor.text_width > 0 {
-            text_options.set("width", v_value!(descriptor.text_width));
+            text_options.add("width", v_value!(descriptor.text_width));
         }
         // Ignore dpi if height is set
         if descriptor.text_width > 0 && descriptor.text_height > 0 {
-            text_options.set("height", v_value!(descriptor.text_height));
+            text_options.add("height", v_value!(descriptor.text_height));
         } else if descriptor.text_dpi > 0 {
-            text_options.set("dpi", v_value!(descriptor.text_dpi));
+            text_options.add("dpi", v_value!(descriptor.text_dpi));
         }
         if !descriptor.text_font.is_empty() {
-            text_options.set("font", v_value!(descriptor.text_font.as_str()));
+            text_options.add("font", v_value!(descriptor.text_font.as_str()));
         }
         if !descriptor.text_fontfile.is_empty() {
-            text_options.set("fontfile", v_value!(descriptor.text_fontfile.as_str()));
+            text_options.add("fontfile", v_value!(descriptor.text_fontfile.as_str()));
         }
         let image = VipsImage::text_with_opts(&descriptor.text_value, text_options)?;
 
         if descriptor.text_rgba {
             (image, ImageType::RAW)
         } else {
-            (image.copy_with_opts(VOption::new().with("interpretation", v_value!(Interpretation::BW as i32)))?, ImageType::RAW)
+            (image.copy_with_opts(VOption::new().set("interpretation", v_value!(Interpretation::BW as i32)))?, ImageType::RAW)
         }
     } else {
         // From filesystem
@@ -441,32 +441,32 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
             return Err(OperationErrorExt(format!("Input file is missing: {}", descriptor.file)));
         }
         if image_type != ImageType::UNKNOWN {
-            let mut option = VOption::new().with("access", v_value!(descriptor.access as i32)).with("fail_on", v_value!(descriptor.fail_on as i32));
+            let mut option = VOption::new().set("access", v_value!(descriptor.access as i32)).set("fail_on", v_value!(descriptor.fail_on as i32));
 
             if descriptor.unlimited && image_type_supports_unlimited(&image_type) {
-                option.set("unlimited", v_value!(true));
+                option.add("unlimited", v_value!(true));
             }
 
             if image_type_supports_page(&image_type) {
-                option.set("n", v_value!(descriptor.pages));
-                option.set("page", v_value!(descriptor.page));
+                option.add("n", v_value!(descriptor.pages));
+                option.add("page", v_value!(descriptor.page));
             }
 
             let density = descriptor.density.to_string();
             match image_type {
                 ImageType::SVG => {
-                    option.set("dpi", v_value!(descriptor.density));
-                    option.set("stylesheet", v_value!(&descriptor.svg_stylesheet));
-                    option.set("high_bitdepth", v_value!(descriptor.svg_high_bitdepth))
+                    option.add("dpi", v_value!(descriptor.density));
+                    option.add("stylesheet", v_value!(&descriptor.svg_stylesheet));
+                    option.add("high_bitdepth", v_value!(descriptor.svg_high_bitdepth))
                 }
-                ImageType::Tiff => option.set("tiffSubifd", v_value!(descriptor.tiff_subifd)),
+                ImageType::Tiff => option.add("tiffSubifd", v_value!(descriptor.tiff_subifd)),
                 ImageType::PDF => {
-                    option.set("dpi", v_value!(descriptor.density));
-                    option.set("background", v_value!(descriptor.pdf_background.as_slice()))
+                    option.add("dpi", v_value!(descriptor.density));
+                    option.add("background", v_value!(descriptor.pdf_background.as_slice()))
                 }
-                ImageType::OPENSLIDE => option.set("openSlideLevel", v_value!(descriptor.open_slide_level)),
-                ImageType::JP2 => option.set("oneshot", v_value!(descriptor.jp2_oneshot)),
-                ImageType::MAGICK => option.set("density", v_value!(&density)),
+                ImageType::OPENSLIDE => option.add("openSlideLevel", v_value!(descriptor.open_slide_level)),
+                ImageType::JP2 => option.add("oneshot", v_value!(descriptor.jp2_oneshot)),
+                ImageType::MAGICK => option.add("density", v_value!(&density)),
                 _ => {}
             };
 
@@ -518,32 +518,32 @@ pub(crate) fn open_input_from_buffer(descriptor: &InputDescriptor) -> Result<(Vi
         // Compressed data
         let image_type = determine_image_type(&descriptor.buffer);
         if image_type != ImageType::UNKNOWN {
-            let mut option = VOption::new().with("access", v_value!(descriptor.access as i32)).with("fail_on", v_value!(descriptor.fail_on as i32));
+            let mut option = VOption::new().set("access", v_value!(descriptor.access as i32)).set("fail_on", v_value!(descriptor.fail_on as i32));
 
             if descriptor.unlimited && image_type_supports_unlimited(&image_type) {
-                option.set("unlimited", v_value!(true));
+                option.add("unlimited", v_value!(true));
             }
 
             if image_type_supports_page(&image_type) {
-                option.set("n", v_value!(descriptor.pages));
-                option.set("page", v_value!(descriptor.page));
+                option.add("n", v_value!(descriptor.pages));
+                option.add("page", v_value!(descriptor.page));
             }
 
             let density = descriptor.density.to_string();
             match image_type {
                 ImageType::SVG => {
-                    option.set("dpi", v_value!(descriptor.density));
-                    option.set("stylesheet", v_value!(&descriptor.svg_stylesheet));
-                    option.set("high_bitdepth", v_value!(descriptor.svg_high_bitdepth))
+                    option.add("dpi", v_value!(descriptor.density));
+                    option.add("stylesheet", v_value!(&descriptor.svg_stylesheet));
+                    option.add("high_bitdepth", v_value!(descriptor.svg_high_bitdepth))
                 }
-                ImageType::Tiff => option.set("tiffSubifd", v_value!(descriptor.tiff_subifd)),
+                ImageType::Tiff => option.add("tiffSubifd", v_value!(descriptor.tiff_subifd)),
                 ImageType::PDF => {
-                    option.set("dpi", v_value!(descriptor.density));
-                    option.set("background", v_value!(descriptor.pdf_background.as_slice()))
+                    option.add("dpi", v_value!(descriptor.density));
+                    option.add("background", v_value!(descriptor.pdf_background.as_slice()))
                 }
-                ImageType::OPENSLIDE => option.set("openSlideLevel", v_value!(descriptor.open_slide_level)),
-                ImageType::JP2 => option.set("oneshot", v_value!(descriptor.jp2_oneshot)),
-                ImageType::MAGICK => option.set("density", v_value!(&density)),
+                ImageType::OPENSLIDE => option.add("openSlideLevel", v_value!(descriptor.open_slide_level)),
+                ImageType::JP2 => option.add("oneshot", v_value!(descriptor.jp2_oneshot)),
+                ImageType::MAGICK => option.add("density", v_value!(&density)),
                 _ => {}
             };
             let image = VipsImage::new_from_buffer_with_opts(descriptor.buffer.as_slice(), option)?;
