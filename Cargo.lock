@@ -310,6 +310,7 @@ checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 [[package]]
 name = "libvips"
 version = "0.1.0"
+source = "git+https://github.com/mrdkprj/libvips-rs-msvc.git?rev=bf53a3adea51236237c3916a611925c5ba33948c#bf53a3adea51236237c3916a611925c5ba33948c"
 dependencies = [
  "num-derive",
  "num-traits",

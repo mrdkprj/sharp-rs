@@ -9,8 +9,8 @@ name = "sharp"
 path = "src/lib.rs"
 
 [dependencies]
-#libvips = { git = "https://github.com/mrdkprj/libvips-rs-msvc.git", rev="bf53a3adea51236237c3916a611925c5ba33948c" }
-libvips ={path="../libvips-rust-bindings"}
+libvips = { git = "https://github.com/mrdkprj/libvips-rs-msvc.git", rev="bf53a3adea51236237c3916a611925c5ba33948c" }
+#libvips ={path="../libvips-rust-bindings"}
 serde = { version = "1.0", features = ["derive"] }
 num-traits = "0.2"
 num-derive = "0.4"
