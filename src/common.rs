@@ -1,8 +1,11 @@
 use crate::util::new_c_string;
 use libvips::{
     bindings::{
-        g_signal_connect_data, vips_blob_get_type, vips_error, vips_foreign_find_load, vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map, vips_image_set_kill,
-        vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc, GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT, VIPS_META_SEQUENTIAL,
+        g_signal_connect_data, vips_blob_get_type, vips_error, vips_foreign_find_load,
+        vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map,
+        vips_image_set_kill, vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc,
+        GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT,
+        VIPS_META_SEQUENTIAL,
     },
     error::Error::OperationError,
     ops::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
@@ -121,7 +124,7 @@ impl Default for InputDescriptor {
             svg_stylesheet: String::new(),
             jp2_oneshot: false,
             svg_high_bitdepth: false,
-            tiff_subifd: 0,
+            tiff_subifd: -1,
             open_slide_level: 0,
         }
     }
@@ -186,7 +189,10 @@ pub(crate) fn ends_with(str: &str, end: &str) -> bool {
 }
 
 pub(crate) fn is_jpeg(str: &str) -> bool {
-    ends_with(str, ".jpg") || ends_with(str, ".jpeg") || ends_with(str, ".JPG") || ends_with(str, ".JPEG")
+    ends_with(str, ".jpg")
+        || ends_with(str, ".jpeg")
+        || ends_with(str, ".JPG")
+        || ends_with(str, ".JPEG")
 }
 
 pub(crate) fn is_png(str: &str) -> bool {
@@ -213,7 +219,10 @@ pub(crate) fn is_jp2(str: &str) -> bool {
 }
 
 pub(crate) fn is_tiff(str: &str) -> bool {
-    ends_with(str, ".tif") || ends_with(str, ".tiff") || ends_with(str, ".TIF") || ends_with(str, ".TIFF")
+    ends_with(str, ".tif")
+        || ends_with(str, ".tiff")
+        || ends_with(str, ".TIF")
+        || ends_with(str, ".TIFF")
 }
 
 pub(crate) fn is_heic(str: &str) -> bool {
@@ -237,11 +246,17 @@ pub(crate) fn is_dz(str: &str) -> bool {
 }
 
 pub(crate) fn is_dz_zip(str: &str) -> bool {
-    ends_with(str, ".zip") || ends_with(str, ".ZIP") || ends_with(str, ".szi") || ends_with(str, ".SZI")
+    ends_with(str, ".zip")
+        || ends_with(str, ".ZIP")
+        || ends_with(str, ".szi")
+        || ends_with(str, ".SZI")
 }
 
 pub(crate) fn is_v(str: &str) -> bool {
-    ends_with(str, ".v") || ends_with(str, ".V") || ends_with(str, ".vips") || ends_with(str, ".VIPS")
+    ends_with(str, ".v")
+        || ends_with(str, ".V")
+        || ends_with(str, ".vips")
+        || ends_with(str, ".VIPS")
 }
 
 pub(crate) fn image_type_id(image_type: ImageType) -> String {
@@ -371,7 +386,10 @@ pub(crate) fn image_type_supports_page(image_type: &ImageType) -> bool {
   Does this image type support removal of safety limits?
 */
 pub(crate) fn image_type_supports_unlimited(image_type: &ImageType) -> bool {
-    image_type == &ImageType::Jpeg || image_type == &ImageType::Png || image_type == &ImageType::SVG || image_type == &ImageType::HEIF
+    image_type == &ImageType::Jpeg
+        || image_type == &ImageType::Png
+        || image_type == &ImageType::SVG
+        || image_type == &ImageType::HEIF
 }
 
 /*
@@ -409,7 +427,12 @@ pub(crate) fn set_profile(image: VipsImage, icc: Option<Vec<u8>>) -> Result<Vips
     Ok(image)
 }
 
-unsafe extern "C" fn remove_exif_callback(_image: *mut libvips::bindings::_VipsImage, name: *const c_char, _value: *mut GValue, data: *mut c_void) -> *mut c_void {
+unsafe extern "C" fn remove_exif_callback(
+    _image: *mut libvips::bindings::_VipsImage,
+    name: *const c_char,
+    _value: *mut GValue,
+    data: *mut c_void,
+) -> *mut c_void {
     if data.is_null() || name.is_null() {
         return data;
     }
@@ -479,7 +502,13 @@ pub(crate) fn remove_exif_orientation(image: VipsImage) -> Result<VipsImage> {
 /*
   Set animation properties if necessary.
 */
-pub(crate) fn set_animation_properties(image: VipsImage, n_pages: i32, page_height: i32, delay: &[i32], loop_: i32) -> Result<VipsImage> {
+pub(crate) fn set_animation_properties(
+    image: VipsImage,
+    n_pages: i32,
+    page_height: i32,
+    delay: &[i32],
+    loop_: i32,
+) -> Result<VipsImage> {
     let has_delay = !delay.is_empty();
     let copied_image = image.copy()?;
 
@@ -549,7 +578,11 @@ pub(crate) fn get_density(image: &VipsImage) -> i32 {
 */
 pub(crate) fn set_density(image: VipsImage, density: f64) -> Result<VipsImage> {
     let pixels_per_mm = density / 25.4;
-    image.copy_with_opts(VOption::new().set("xres", VipsValue::Double(pixels_per_mm)).set("name", VipsValue::Double(pixels_per_mm)))
+    image.copy_with_opts(
+        VOption::new()
+            .set("xres", VipsValue::Double(pixels_per_mm))
+            .set("name", VipsValue::Double(pixels_per_mm)),
+    )
 }
 
 /*
@@ -564,18 +597,24 @@ pub(crate) fn assert_image_type_dimensions(image: &VipsImage, image_type: ImageT
 
     if image_type == ImageType::Jpeg {
         if image.get_width() > 65535 || height > 65535 {
-            return Err(OperationError("Processed image is too large for the JPEG format"));
+            return Err(OperationError(
+                "Processed image is too large for the JPEG format".to_string(),
+            ));
         }
     } else if image_type == ImageType::Webp {
         if image.get_width() > 16383 || height > 16383 {
-            return Err(OperationError("Processed image is too large for the WebP format"));
+            return Err(OperationError(
+                "Processed image is too large for the WebP format".to_string(),
+            ));
         }
     } else if image_type == ImageType::GIF {
         if image.get_width() > 65535 || height > 65535 {
-            return Err(OperationError("Processed image is too large for the GIF format"));
+            return Err(OperationError(
+                "Processed image is too large for the GIF format".to_string(),
+            ));
         }
     } else if image_type == ImageType::HEIF && image.get_width() > 16384 || height > 16384 {
-        return Err(OperationError("Processed image is too large for the HEIF format"));
+        return Err(OperationError("Processed image is too large for the HEIF format".to_string()));
     }
 
     Ok(())
@@ -590,7 +629,8 @@ pub(crate) fn set_timeout(image: &VipsImage, seconds: i32) {
             let im = image.as_mut_ptr();
 
             if (*im).progress_signal.is_null() {
-                let timeout = vips_malloc(im as *mut _, std::mem::size_of::<c_int>() as _) as *mut c_int;
+                let timeout =
+                    vips_malloc(im as *mut _, std::mem::size_of::<c_int>() as _) as *mut c_int;
                 if timeout.is_null() {
                     panic!("Failed to allocate timeout");
                 }
@@ -599,7 +639,9 @@ pub(crate) fn set_timeout(image: &VipsImage, seconds: i32) {
                 g_signal_connect_data(
                     im as *mut _,
                     b"eval\0".as_ptr() as *const _,
-                    Some(std::mem::transmute::<*const (), unsafe extern "C" fn()>(vips_progress_call_back as *const ())),
+                    Some(std::mem::transmute::<*const (), unsafe extern "C" fn()>(
+                        vips_progress_call_back as *const (),
+                    )),
                     timeout as *mut _,
                     None,
                     0,
@@ -614,7 +656,11 @@ pub(crate) fn set_timeout(image: &VipsImage, seconds: i32) {
 /*
   Event listener for progress updates, used to detect timeout
 */
-unsafe extern "C" fn vips_progress_call_back(im: *mut libvips::bindings::VipsImage, progress: *mut libvips::bindings::VipsProgress, timeout: *mut c_int) {
+unsafe extern "C" fn vips_progress_call_back(
+    im: *mut libvips::bindings::VipsImage,
+    progress: *mut libvips::bindings::VipsProgress,
+    timeout: *mut c_int,
+) {
     if *timeout > 0 && (*progress).run >= *timeout {
         vips_image_set_kill(im, 1);
         let c_str_domain = CString::new("timeout").unwrap();
@@ -630,7 +676,13 @@ unsafe extern "C" fn vips_progress_call_back(im: *mut libvips::bindings::VipsIma
 
   @Azurebyte: We are basically swapping the inWidth and outWidth, inHeight and outHeight from the CalculateCrop function.
 */
-pub(crate) fn calculate_embed_position(in_width: i32, in_height: i32, out_width: i32, out_height: i32, gravity: i32) -> (i32, i32) {
+pub(crate) fn calculate_embed_position(
+    in_width: i32,
+    in_height: i32,
+    out_width: i32,
+    out_height: i32,
+    gravity: i32,
+) -> (i32, i32) {
     let mut left = 0;
     let mut top = 0;
     match gravity {
@@ -681,7 +733,13 @@ pub(crate) fn calculate_embed_position(in_width: i32, in_height: i32, out_width:
   Calculate the (left, top) coordinates of the output image
   within the input image, applying the given gravity during a crop.
 */
-pub(crate) fn calculate_crop(in_width: i32, in_height: i32, out_width: i32, out_height: i32, gravity: i32) -> (i32, i32) {
+pub(crate) fn calculate_crop(
+    in_width: i32,
+    in_height: i32,
+    out_width: i32,
+    out_height: i32,
+    gravity: i32,
+) -> (i32, i32) {
     let mut left = 0;
     let mut top = 0;
     match gravity {
@@ -732,7 +790,14 @@ pub(crate) fn calculate_crop(in_width: i32, in_height: i32, out_width: i32, out_
   Calculate the (left, top) coordinates of the output image
   within the input image, applying the given x and y offsets.
 */
-pub(crate) fn calculate_crop2(in_width: i32, in_height: i32, out_width: i32, out_height: i32, x: i32, y: i32) -> (i32, i32) {
+pub(crate) fn calculate_crop2(
+    in_width: i32,
+    in_height: i32,
+    out_width: i32,
+    out_height: i32,
+    x: i32,
+    y: i32,
+) -> (i32, i32) {
     // default values
     let mut left = 0;
     let mut top = 0;
@@ -757,20 +822,28 @@ pub(crate) fn calculate_crop2(in_width: i32, in_height: i32, out_width: i32, out
   Are pixel values in this image 16-bit integer?
 */
 pub(crate) fn is16_bit(interpretation: Interpretation) -> bool {
-    interpretation as i32 == Interpretation::Rgb16 as i32 || interpretation as i32 == Interpretation::Grey16 as i32
+    interpretation as i32 == Interpretation::Rgb16 as i32
+        || interpretation as i32 == Interpretation::Grey16 as i32
 }
 
 /*
   Convert RGBA value to another colourspace
 */
-pub(crate) fn get_rgba_as_colourspace(rgba: Vec<f64>, interpretation: Interpretation, should_premultiply: bool) -> Result<Vec<f64>> {
+pub(crate) fn get_rgba_as_colourspace(
+    rgba: Vec<f64>,
+    interpretation: Interpretation,
+    should_premultiply: bool,
+) -> Result<Vec<f64>> {
     let bands = rgba.len();
     if bands < 3 {
         return Ok(rgba);
     }
     let pixel = VipsImage::new_matrix(1, 1)?;
     pixel.set_int("bands", bands as _);
-    let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(interpretation, VOption::new().set("source_space", VipsValue::Int(Interpretation::Srgb as _)))?;
+    let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(
+        interpretation,
+        VOption::new().set("source_space", VipsValue::Int(Interpretation::Srgb as _)),
+    )?;
 
     if should_premultiply {
         let pixel = pixel.premultiply()?;
@@ -783,7 +856,11 @@ pub(crate) fn get_rgba_as_colourspace(rgba: Vec<f64>, interpretation: Interpreta
 /*
   Apply the alpha channel to a given colour
 */
-pub(crate) fn apply_alpha(image: VipsImage, colour: &[f64], should_premultiply: bool) -> Result<(VipsImage, Vec<f64>)> {
+pub(crate) fn apply_alpha(
+    image: VipsImage,
+    colour: &[f64],
+    should_premultiply: bool,
+) -> Result<(VipsImage, Vec<f64>)> {
     // Scale up 8-bit values to match 16-bit input image
     let interpretation = image.get_interpretation()?;
     let multiplier = if is16_bit(interpretation) {
@@ -808,7 +885,8 @@ pub(crate) fn apply_alpha(image: VipsImage, colour: &[f64], should_premultiply: 
         alpha_colour.extend(std::iter::repeat(colour[3] * multiplier).take(extra_bands as usize));
     }
     // Ensure alphaColour colour uses correct colourspace
-    alpha_colour = get_rgba_as_colourspace(alpha_colour, image.get_interpretation()?, should_premultiply)?;
+    alpha_colour =
+        get_rgba_as_colourspace(alpha_colour, image.get_interpretation()?, should_premultiply)?;
 
     // Add non-transparent alpha channel, if required
     if colour[3] < 255.0 && !image.image_hasalpha() {
@@ -825,7 +903,10 @@ pub(crate) fn apply_alpha(image: VipsImage, colour: &[f64], should_premultiply: 
 pub(crate) fn remove_alpha(image: VipsImage) -> Result<VipsImage> {
     let mut image = image.copy()?;
     while image.get_bands() > 1 && image.image_hasalpha() {
-        image = image.extract_band_with_opts(0, VOption::new().set("n", VipsValue::Int(image.get_bands() - 1)))?;
+        image = image.extract_band_with_opts(
+            0,
+            VOption::new().set("n", VipsValue::Int(image.get_bands() - 1)),
+        )?;
     }
     Ok(image)
 }
@@ -843,7 +924,15 @@ pub(crate) fn ensure_alpha(image: VipsImage, value: f64) -> Result<VipsImage> {
     }
 }
 
-pub(crate) fn resolve_shrink(width: i32, height: i32, target_width: i32, target_height: i32, canvas: Canvas, without_enlargement: bool, without_reduction: bool) -> (f64, f64) {
+pub(crate) fn resolve_shrink(
+    width: i32,
+    height: i32,
+    target_width: i32,
+    target_height: i32,
+    canvas: Canvas,
+    without_enlargement: bool,
+    without_reduction: bool,
+) -> (f64, f64) {
     let mut hshrink: f64 = 1.0;
     let mut vshrink: f64 = 1.0;
 
@@ -911,7 +1000,6 @@ pub(crate) fn resolve_shrink(width: i32, height: i32, target_width: i32, target_
 */
 pub(crate) fn stay_sequential(image: VipsImage, condition: bool) -> Result<VipsImage> {
     if unsafe { vips_image_is_sequential(image.as_mut_ptr()) > 0 } && condition {
-        println!("here?");
         let copied_image = VipsImage::image_copy_memory(image)?.copy()?;
         copied_image.remove(VIPS_META_SEQUENTIAL);
         Ok(copied_image)

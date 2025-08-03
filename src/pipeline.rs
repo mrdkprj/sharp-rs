@@ -1,22 +1,32 @@
 use crate::{
     common::{
-        apply_alpha, assert_image_type_dimensions, calculate_crop, calculate_crop2, calculate_embed_position, ensure_alpha, exif_orientation, get_profile, has_profile, image_type_id, is16_bit, is_dz,
-        is_dz_zip, is_gif, is_heif, is_jp2, is_jpeg, is_jxl, is_png, is_tiff, is_v, is_webp, remove_alpha, remove_animation_properties, remove_exif, remove_exif_orientation, remove_gif_palette,
-        resolve_shrink, set_animation_properties, set_density, set_exif_orientation, set_profile, set_timeout, stay_sequential, Canvas, ImageType, InputDescriptor,
+        apply_alpha, assert_image_type_dimensions, calculate_crop, calculate_crop2,
+        calculate_embed_position, ensure_alpha, exif_orientation, get_profile, has_profile,
+        image_type_id, is16_bit, is_dz, is_dz_zip, is_gif, is_heif, is_jp2, is_jpeg, is_jxl,
+        is_png, is_tiff, is_v, is_webp, remove_alpha, remove_animation_properties, remove_exif,
+        remove_exif_orientation, remove_gif_palette, resolve_shrink, set_animation_properties,
+        set_density, set_exif_orientation, set_profile, set_timeout, stay_sequential, Canvas,
+        ImageType, InputDescriptor,
     },
     input::open_input,
     operation::{
-        bandbool, blur, boolean, clahe, convolve, crop_multi_page, dilate, embed_multi_page, ensure_colourspace, erode, flatten, gamma, linear, modulate, negate, normalise, recomb, sharpen,
-        threshold, tint, trim, unflatten,
+        bandbool, blur, boolean, clahe, convolve, crop_multi_page, dilate, embed_multi_page,
+        ensure_colourspace, erode, flatten, gamma, linear, modulate, negate, normalise, recomb,
+        sharpen, threshold, tint, trim, unflatten,
     },
     util::VipsGuard,
 };
 use libvips::{
-    bindings::{VipsForeignKeep_VIPS_FOREIGN_KEEP_EXIF, VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC, VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT},
-    error::Error::{OperationError, OperationErrorExt},
+    bindings::{
+        VipsForeignKeep_VIPS_FOREIGN_KEEP_EXIF, VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC,
+        VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT,
+    },
+    error::Error::OperationError,
     ops::{
-        Angle, BandFormat, BlendMode, Direction, Extend, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignPngFilter, ForeignSubsample, ForeignTiffCompression,
-        ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset, Intent, Interesting, Interpretation, Kernel, OperationBoolean, Precision,
+        Angle, BandFormat, BlendMode, Direction, Extend, ForeignDzContainer, ForeignDzDepth,
+        ForeignDzLayout, ForeignHeifCompression, ForeignPngFilter, ForeignSubsample,
+        ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
+        Intent, Interesting, Interpretation, Kernel, OperationBoolean, Precision,
     },
     utils::{get_g_type, G_TYPE_INT},
     v_value,
@@ -633,14 +643,16 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             images.push(image);
         }
         if has_alpha {
-            while let Some(image) = images.pop() {
-                if !image.image_hasalpha() {
-                    let image = ensure_alpha(image, 1.0)?;
-                    images.push(image)
-                } else {
-                    images.push(image)
-                }
-            }
+            images = images
+                .into_iter()
+                .map(|img| {
+                    if !img.image_hasalpha() {
+                        ensure_alpha(img, 1.0)
+                    } else {
+                        Ok(img)
+                    }
+                })
+                .collect::<Result<Vec<VipsImage>>>()?;
         } else {
             baton.input.join_background.pop();
         }
@@ -681,7 +693,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // Calculate angle of rotation
     let (mut auto_rotation, mut auto_flip, mut auto_flop) = if baton.input.auto_orient {
         // Rotate and flip image according to Exif orientation
-        let (auto_rotation, auto_flip, auto_flop) = calculate_exif_rotation_and_flip(exif_orientation(&image));
+        let (auto_rotation, auto_flip, auto_flop) =
+            calculate_exif_rotation_and_flip(exif_orientation(&image));
         image = remove_exif_orientation(image)?;
         (auto_rotation, auto_flip, auto_flop)
     } else {
@@ -691,10 +704,23 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     let mut rotation = calculate_angle_rotation(baton.angle);
 
     // Rotate pre-extract
-    let should_rotate_before =
-        baton.rotate_before_pre_extract && (rotation != Angle::D0 || auto_rotation != Angle::D0 || auto_flip || baton.flip || auto_flop || baton.flop || baton.rotation_angle != 0.0);
+    let should_rotate_before = baton.rotate_before_pre_extract
+        && (rotation != Angle::D0
+            || auto_rotation != Angle::D0
+            || auto_flip
+            || baton.flip
+            || auto_flop
+            || baton.flop
+            || baton.rotation_angle != 0.0);
     if should_rotate_before {
-        image = stay_sequential(image, rotation != Angle::D0 || auto_rotation != Angle::D0 || auto_flip || baton.flip || baton.rotation_angle != 0.0)?;
+        image = stay_sequential(
+            image,
+            rotation != Angle::D0
+                || auto_rotation != Angle::D0
+                || auto_flip
+                || baton.flip
+                || baton.rotation_angle != 0.0,
+        )?;
 
         if auto_rotation != Angle::D0 {
             if auto_rotation != Angle::D180 {
@@ -724,7 +750,10 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             multi_page_unsupported(n_pages, "Rotate")?;
             let (alpha_image, background) = apply_alpha(image, &baton.rotation_background, false)?;
             image = alpha_image;
-            image = image.rotate_with_opts(baton.rotation_angle, VOption::new().set("background", v_value!(background.as_slice())))?;
+            image = image.rotate_with_opts(
+                baton.rotation_angle,
+                VOption::new().set("background", v_value!(background.as_slice())),
+            )?;
 
             image = VipsImage::image_copy_memory(image)?;
         }
@@ -742,9 +771,22 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // Pre extraction
     if baton.top_offset_pre != -1 {
         image = if n_pages > 1 {
-            crop_multi_page(image, baton.left_offset_pre, baton.top_offset_pre, baton.width_pre, baton.height_pre, n_pages, &mut page_height)?
+            crop_multi_page(
+                image,
+                baton.left_offset_pre,
+                baton.top_offset_pre,
+                baton.width_pre,
+                baton.height_pre,
+                n_pages,
+                &mut page_height,
+            )?
         } else {
-            image.extract_area(baton.left_offset_pre, baton.top_offset_pre, baton.width_pre, baton.height_pre)?
+            image.extract_area(
+                baton.left_offset_pre,
+                baton.top_offset_pre,
+                baton.width_pre,
+                baton.height_pre,
+            )?
         };
     }
 
@@ -764,12 +806,22 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // When auto-rotating by 90 or 270 degrees, swap the target width and
     // height to ensure the behavior aligns with how it would have been if
     // the rotation had taken place *before* resizing.
-    if !baton.rotate_before_pre_extract && (auto_rotation == Angle::D90 || auto_rotation == Angle::D270) {
+    if !baton.rotate_before_pre_extract
+        && (auto_rotation == Angle::D90 || auto_rotation == Angle::D270)
+    {
         std::mem::swap(&mut target_resize_width, &mut target_resize_height);
     }
 
     // Shrink to pageHeight, so we work for multi-page images
-    let (hshrink, vshrink) = resolve_shrink(input_width, page_height, target_resize_width, target_resize_height, baton.canvas, baton.without_enlargement, baton.without_reduction);
+    let (hshrink, vshrink) = resolve_shrink(
+        input_width,
+        page_height,
+        target_resize_width,
+        target_resize_height,
+        baton.canvas,
+        baton.without_enlargement,
+        baton.without_reduction,
+    );
 
     // The jpeg preload shrink.
     let mut jpeg_shrink_on_load = 1;
@@ -870,7 +922,9 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             };
             let image = set_density(image, baton.input.density)?;
             if image.get_width() > 32767 || image.get_height() > 32767 {
-                return Err(OperationError("Input SVG image will exceed 32767x32767 pixel limit when scaled"));
+                return Err(OperationError(
+                    "Input SVG image will exceed 32767x32767 pixel limit when scaled".to_string(),
+                ));
             }
             image
         } else if input_image_type == ImageType::PDF {
@@ -893,8 +947,12 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             image
         }
     } else {
-        if input_image_type == ImageType::SVG && (image.get_width() > 32767 || image.get_height() > 32767) {
-            return Err(OperationError("Input SVG image exceeds 32767x32767 pixel limit"));
+        if input_image_type == ImageType::SVG
+            && (image.get_width() > 32767 || image.get_height() > 32767)
+        {
+            return Err(OperationError(
+                "Input SVG image exceeds 32767x32767 pixel limit".to_string(),
+            ));
         }
         image
     };
@@ -910,7 +968,15 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     }
 
     // Shrink to pageHeight, so we work for multi-page images
-    let (hshrink, mut vshrink) = resolve_shrink(input_width, page_height, target_resize_width, target_resize_height, baton.canvas, baton.without_enlargement, baton.without_reduction);
+    let (hshrink, mut vshrink) = resolve_shrink(
+        input_width,
+        page_height,
+        target_resize_width,
+        target_resize_height,
+        baton.canvas,
+        baton.without_enlargement,
+        baton.without_reduction,
+    );
 
     let mut target_height = (page_height as f64 / vshrink).round() as i32;
     let mut target_page_height = target_height;
@@ -919,12 +985,14 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // pageHeight or we'll have pixels straddling pixel boundaries
     if input_height > page_height {
         target_height *= n_pages;
-        vshrink = (input_height / target_height) as f64;
+        vshrink = input_height as f64 / target_height as f64;
     }
 
     // Ensure we're using a device-independent colour space
     let mut input_profile = None;
-    if (baton.keep_metadata as u32 & VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC != 0) && baton.with_icc_profile.is_empty() {
+    if (baton.keep_metadata as u32 & VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC != 0)
+        && baton.with_icc_profile.is_empty()
+    {
         // Cache input profile for use with output
         input_profile = get_profile(&image);
         baton.input.ignore_icc = true;
@@ -962,8 +1030,15 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 println!("Invalid embedded profile");
                 image
             });
-    } else if image.get_interpretation()? == Interpretation::Cmyk && baton.colourspace_pipeline != Interpretation::Cmyk {
-        image = image.icc_transform_with_opts(processing_profile, VOption::new().set("input_profile", v_value!("cmyk")).set("intent", v_value!(Intent::Perceptual as i32)))?;
+    } else if image.get_interpretation()? == Interpretation::Cmyk
+        && baton.colourspace_pipeline != Interpretation::Cmyk
+    {
+        image = image.icc_transform_with_opts(
+            processing_profile,
+            VOption::new()
+                .set("input_profile", v_value!("cmyk"))
+                .set("intent", v_value!(Intent::Perceptual as i32)),
+        )?;
     }
 
     // Flatten image to remove alpha channel
@@ -992,7 +1067,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     }
 
     let premultiply_format = image.get_format()?;
-    let should_premultiply_alpha = image.image_hasalpha() && (should_resize || should_blur || should_conv || should_sharpen);
+    let should_premultiply_alpha =
+        image.image_hasalpha() && (should_resize || should_blur || should_conv || should_sharpen);
 
     if should_premultiply_alpha {
         image = image.premultiply()?.cast(premultiply_format)?;
@@ -1000,10 +1076,18 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
 
     // Resize
     if should_resize {
-        image = image.resize_with_opts(1.0 / hshrink, VOption::new().set("vscale", v_value!(1.0 / vshrink)).set("kernel", v_value!(baton.kernel as i32)))?;
+        image = image.resize_with_opts(
+            1.0 / hshrink,
+            VOption::new()
+                .set("vscale", v_value!(1.0 / vshrink))
+                .set("kernel", v_value!(baton.kernel as i32)),
+        )?;
     }
 
-    image = stay_sequential(image, auto_rotation != Angle::D0 || baton.flip || auto_flip || rotation != Angle::D0)?;
+    image = stay_sequential(
+        image,
+        auto_rotation != Angle::D0 || baton.flip || auto_flip || rotation != Angle::D0,
+    )?;
     // Auto-rotate post-extract
     if auto_rotation != Angle::D0 {
         if auto_rotation != Angle::D180 {
@@ -1035,7 +1119,9 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             join_image = ensure_colourspace(join_image, baton.colourspace_pipeline)?;
             image = VipsImage::bandjoin(&[image, join_image])?;
         }
-        image = image.copy_with_opts(VOption::new().set("interpretation", v_value!(baton.colourspace as i32)))?;
+        image = image.copy_with_opts(
+            VOption::new().set("interpretation", v_value!(baton.colourspace as i32)),
+        )?;
         image = remove_gif_palette(image)?;
     }
 
@@ -1057,17 +1143,42 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // Crop/embed
     if input_width != baton.width || input_height != baton.height {
         if baton.canvas == Canvas::Embed {
-            let (alpha_image, background) = apply_alpha(image, &baton.resize_background, should_premultiply_alpha)?;
+            let (alpha_image, background) =
+                apply_alpha(image, &baton.resize_background, should_premultiply_alpha)?;
             image = alpha_image;
             // Embed
-            let (left, top) = calculate_embed_position(input_width, input_height, baton.width, baton.height, baton.position);
+            let (left, top) = calculate_embed_position(
+                input_width,
+                input_height,
+                baton.width,
+                baton.height,
+                baton.position,
+            );
             let width = std::cmp::max(input_width, baton.width);
             let height = std::cmp::max(input_height, baton.height);
 
             image = if n_pages > 1 {
-                embed_multi_page(image, left, top, width, height, Extend::Background, &background, n_pages, &mut target_page_height)?
+                embed_multi_page(
+                    image,
+                    left,
+                    top,
+                    width,
+                    height,
+                    Extend::Background,
+                    &background,
+                    n_pages,
+                    &mut target_page_height,
+                )?
             } else {
-                image.embed_with_opts(left, top, width, height, VOption::new().set("extend", v_value!(Extend::Background as i32)).set("background", v_value!(background.as_slice())))?
+                image.embed_with_opts(
+                    left,
+                    top,
+                    width,
+                    height,
+                    VOption::new()
+                        .set("extend", v_value!(Extend::Background as i32))
+                        .set("background", v_value!(background.as_slice())),
+                )?
             };
         } else if baton.canvas == Canvas::Crop {
             if baton.width > input_width {
@@ -1080,12 +1191,26 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             // Crop
             if baton.position < 9 {
                 // Gravity-based crop
-                let (left, top) = calculate_crop(input_width, input_height, baton.width, baton.height, baton.position);
+                let (left, top) = calculate_crop(
+                    input_width,
+                    input_height,
+                    baton.width,
+                    baton.height,
+                    baton.position,
+                );
                 let width = std::cmp::min(input_width, baton.width);
                 let height = std::cmp::min(input_height, baton.height);
 
                 image = if n_pages > 1 {
-                    crop_multi_page(image, left, top, width, height, n_pages, &mut target_page_height)?
+                    crop_multi_page(
+                        image,
+                        left,
+                        top,
+                        width,
+                        height,
+                        n_pages,
+                        &mut target_page_height,
+                    )?
                 } else {
                     image.extract_area(left, top, width, height)?
                 }
@@ -1126,19 +1251,36 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         multi_page_unsupported(n_pages, "Rotate")?;
         image = stay_sequential(image, true)?;
 
-        let (alpha_image, background) = apply_alpha(image, &baton.rotation_background, should_premultiply_alpha)?;
-        image = alpha_image.rotate_with_opts(baton.rotation_angle, VOption::new().set("background", v_value!(background.as_slice())))?;
+        let (alpha_image, background) =
+            apply_alpha(image, &baton.rotation_background, should_premultiply_alpha)?;
+        image = alpha_image.rotate_with_opts(
+            baton.rotation_angle,
+            VOption::new().set("background", v_value!(background.as_slice())),
+        )?;
     }
 
     // Post extraction
     if baton.top_offset_post != -1 {
         if n_pages > 1 {
-            image = crop_multi_page(image, baton.left_offset_post, baton.top_offset_post, baton.width_post, baton.height_post, n_pages, &mut target_page_height)?;
+            image = crop_multi_page(
+                image,
+                baton.left_offset_post,
+                baton.top_offset_post,
+                baton.width_post,
+                baton.height_post,
+                n_pages,
+                &mut target_page_height,
+            )?;
 
             // heightPost is used in the info object, so update to reflect the number of pages
             baton.height_post *= n_pages;
         } else {
-            image = image.extract_area(baton.left_offset_post, baton.top_offset_post, baton.width_post, baton.height_post)?;
+            image = image.extract_area(
+                baton.left_offset_post,
+                baton.top_offset_post,
+                baton.width_post,
+                baton.height_post,
+            )?;
         }
     }
 
@@ -1146,7 +1288,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     if !baton.affine_matrix.is_empty() {
         multi_page_unsupported(n_pages, "Affine")?;
         image = stay_sequential(image, true)?;
-        let (alpha_image, background) = apply_alpha(image, &baton.affine_background, should_premultiply_alpha)?;
+        let (alpha_image, background) =
+            apply_alpha(image, &baton.affine_background, should_premultiply_alpha)?;
         let interp = VipsInterpolate::new_from_name(&baton.affine_interpolator)?;
         image = alpha_image.affine_with_opts(
             baton.affine_matrix.as_slice(),
@@ -1161,7 +1304,11 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     }
 
     // Extend edges
-    if baton.extend_top > 0 || baton.extend_bottom > 0 || baton.extend_left > 0 || baton.extend_right > 0 {
+    if baton.extend_top > 0
+        || baton.extend_bottom > 0
+        || baton.extend_left > 0
+        || baton.extend_right > 0
+    {
         // Embed
         baton.width = image.get_width() + baton.extend_left + baton.extend_right;
         baton.height = (if n_pages > 1 {
@@ -1172,27 +1319,56 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             + baton.extend_bottom;
 
         if baton.extend_with == Extend::Background {
-            let (alpha_image, background) = apply_alpha(image, &baton.extend_background, should_premultiply_alpha)?;
+            let (alpha_image, background) =
+                apply_alpha(image, &baton.extend_background, should_premultiply_alpha)?;
 
             image = stay_sequential(alpha_image, n_pages > 1)?;
             image = if n_pages > 1 {
-                embed_multi_page(image, baton.extend_left, baton.extend_top, baton.width, baton.height, baton.extend_with, &background, n_pages, &mut target_page_height)?
+                embed_multi_page(
+                    image,
+                    baton.extend_left,
+                    baton.extend_top,
+                    baton.width,
+                    baton.height,
+                    baton.extend_with,
+                    &background,
+                    n_pages,
+                    &mut target_page_height,
+                )?
             } else {
                 image.embed_with_opts(
                     baton.extend_left,
                     baton.extend_top,
                     baton.width,
                     baton.height,
-                    VOption::new().set("extend", v_value!(baton.extend_with as i32)).set("background", v_value!(background.as_slice())),
+                    VOption::new()
+                        .set("extend", v_value!(baton.extend_with as i32))
+                        .set("background", v_value!(background.as_slice())),
                 )?
             }
         } else {
             let ignored_background = Vec::with_capacity(1);
             image = stay_sequential(image, true)?;
             image = if n_pages > 1 {
-                embed_multi_page(image, baton.extend_left, baton.extend_top, baton.width, baton.height, baton.extend_with, &ignored_background, n_pages, &mut target_page_height)?
+                embed_multi_page(
+                    image,
+                    baton.extend_left,
+                    baton.extend_top,
+                    baton.width,
+                    baton.height,
+                    baton.extend_with,
+                    &ignored_background,
+                    n_pages,
+                    &mut target_page_height,
+                )?
             } else {
-                image.embed_with_opts(baton.extend_left, baton.extend_top, baton.width, baton.height, VOption::new().set("extend", v_value!(baton.extend_with as i32)))?
+                image.embed_with_opts(
+                    baton.extend_left,
+                    baton.extend_top,
+                    baton.width,
+                    baton.height,
+                    VOption::new().set("extend", v_value!(baton.extend_with as i32)),
+                )?
             };
         }
     }
@@ -1230,7 +1406,14 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
 
     // Convolve
     if should_conv {
-        image = convolve(image, baton.conv_kernel_width, baton.conv_kernel_height, baton.conv_kernel_scale, baton.conv_kernel_offset, &baton.conv_kernel)?;
+        image = convolve(
+            image,
+            baton.conv_kernel_width,
+            baton.conv_kernel_height,
+            baton.conv_kernel_scale,
+            baton.conv_kernel_offset,
+            &baton.conv_kernel,
+        )?;
     }
 
     // Recomb
@@ -1239,13 +1422,25 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     }
 
     // Modulate
-    if baton.brightness != 1.0 || baton.saturation != 1.0 || baton.hue != 0 || baton.lightness != 0.0 {
+    if baton.brightness != 1.0
+        || baton.saturation != 1.0
+        || baton.hue != 0
+        || baton.lightness != 0.0
+    {
         image = modulate(image, baton.brightness, baton.saturation, baton.hue, baton.lightness)?;
     }
 
     // Sharpen
     if should_sharpen {
-        image = sharpen(image, baton.sharpen_sigma, baton.sharpen_m1, baton.sharpen_m2, baton.sharpen_x1, baton.sharpen_y2, baton.sharpen_y3)?;
+        image = sharpen(
+            image,
+            baton.sharpen_sigma,
+            baton.sharpen_m1,
+            baton.sharpen_m2,
+            baton.sharpen_x1,
+            baton.sharpen_y2,
+            baton.sharpen_y3,
+        )?;
     }
 
     // Reverse premultiplication after all transformations
@@ -1268,10 +1463,14 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
 
             if composite.input.auto_orient {
                 // Respect EXIF Orientation
-                let (composite_auto_rotation, composite_auto_flip, composite_auto_flop) = calculate_exif_rotation_and_flip(exif_orientation(&composite_image));
+                let (composite_auto_rotation, composite_auto_flip, composite_auto_flop) =
+                    calculate_exif_rotation_and_flip(exif_orientation(&composite_image));
 
                 composite_image = remove_exif_orientation(composite_image)?;
-                composite_image = stay_sequential(composite_image, composite_auto_rotation != Angle::D0 || composite_auto_flip)?;
+                composite_image = stay_sequential(
+                    composite_image,
+                    composite_auto_rotation != Angle::D0 || composite_auto_flip,
+                )?;
 
                 if composite_auto_rotation != Angle::D0 {
                     composite_image = composite_image.rot(composite_auto_rotation)?;
@@ -1285,8 +1484,12 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             }
 
             // Verify within current dimensions
-            if composite_image.get_width() > image.get_width() || composite_image.get_height() > image.get_height() {
-                return Err(OperationError("Image to composite must have same dimensions or smaller"));
+            if composite_image.get_width() > image.get_width()
+                || composite_image.get_height() > image.get_height()
+            {
+                return Err(OperationError(
+                    "Image to composite must have same dimensions or smaller".to_string(),
+                ));
             }
             // Check if overlay is tiled
             if composite.tile {
@@ -1294,14 +1497,16 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 let mut down = 0;
                 // Use gravity in overlay
                 if composite_image.get_width() <= image.get_width() {
-                    across = (image.get_width() as f32 / composite_image.get_width() as f32).ceil() as _;
+                    across =
+                        (image.get_width() as f32 / composite_image.get_width() as f32).ceil() as _;
                     // Ensure odd number of tiles across when gravity is centre, north or south
                     if composite.gravity == 0 || composite.gravity == 1 || composite.gravity == 3 {
                         across |= 1;
                     }
                 }
                 if composite_image.get_height() <= image.get_height() {
-                    down = (image.get_height() as f32 / composite_image.get_height() as f32).ceil() as _;
+                    down = (image.get_height() as f32 / composite_image.get_height() as f32).ceil()
+                        as _;
                     // Ensure odd number of tiles down when gravity is centre, east or west
                     if composite.gravity == 0 || composite.gravity == 2 || composite.gravity == 4 {
                         down |= 1;
@@ -1311,11 +1516,29 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                     composite_image = stay_sequential(composite_image, true)?;
                     composite_image = composite_image.replicate(across, down)?;
                     let (left, top) = if composite.has_offset {
-                        calculate_crop2(composite_image.get_width(), composite_image.get_height(), image.get_width(), image.get_height(), composite.left, composite.top)
+                        calculate_crop2(
+                            composite_image.get_width(),
+                            composite_image.get_height(),
+                            image.get_width(),
+                            image.get_height(),
+                            composite.left,
+                            composite.top,
+                        )
                     } else {
-                        calculate_crop(composite_image.get_width(), composite_image.get_height(), image.get_width(), image.get_height(), composite.gravity)
+                        calculate_crop(
+                            composite_image.get_width(),
+                            composite_image.get_height(),
+                            image.get_width(),
+                            image.get_height(),
+                            composite.gravity,
+                        )
                     };
-                    composite_image = composite_image.extract_area(left, top, image.get_width(), image.get_height())?;
+                    composite_image = composite_image.extract_area(
+                        left,
+                        top,
+                        image.get_width(),
+                        image.get_height(),
+                    )?;
                 }
                 // gravity was used for extract_area, set it back to its default value of 0
                 composite.gravity = 0;
@@ -1330,13 +1553,26 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             let (left, top) = if composite.has_offset {
                 // Composite image at given offsets
                 if composite.tile {
-                    calculate_crop2(image.get_width(), image.get_height(), composite_image.get_width(), composite_image.get_height(), composite.left, composite.top)
+                    calculate_crop2(
+                        image.get_width(),
+                        image.get_height(),
+                        composite_image.get_width(),
+                        composite_image.get_height(),
+                        composite.left,
+                        composite.top,
+                    )
                 } else {
                     (composite.left, composite.top)
                 }
             } else {
                 // Composite image with given gravity
-                calculate_crop(image.get_width(), image.get_height(), composite_image.get_width(), composite_image.get_height(), composite.gravity)
+                calculate_crop(
+                    image.get_width(),
+                    image.get_height(),
+                    composite_image.get_width(),
+                    composite_image.get_height(),
+                    composite.gravity,
+                )
             };
             images.push(composite_image);
             modes.push(composite.mode as i32);
@@ -1344,7 +1580,11 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             ys.push(top);
         }
         images.insert(0, image);
-        image = VipsImage::composite_with_opts(images.as_mut_slice(), modes.as_mut_slice(), VOption::new().set("x", v_value!(xs.as_slice())).set("y", v_value!(ys.as_slice())))?;
+        image = VipsImage::composite_with_opts(
+            images.as_mut_slice(),
+            modes.as_mut_slice(),
+            VOption::new().set("x", v_value!(xs.as_slice())).set("y", v_value!(ys.as_slice())),
+        )?;
         image = remove_gif_palette(image)?;
     }
 
@@ -1406,9 +1646,16 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
 
     if image.get_interpretation()? != baton.colourspace {
         // Convert colourspace, pass the current known interpretation so libvips doesn't have to guess
-        image = image.colourspace_with_opts(baton.colourspace, VOption::new().set("source_space", v_value!(image.get_interpretation()? as i32)))?;
+        image = image.colourspace_with_opts(
+            baton.colourspace,
+            VOption::new().set("source_space", v_value!(image.get_interpretation()? as i32)),
+        )?;
         // Transform colours from embedded profile to output profile
-        if (baton.keep_metadata as u32 & VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC != 0) && baton.colourspace_pipeline != Interpretation::Cmyk && baton.with_icc_profile.is_empty() && has_profile(&image) {
+        if (baton.keep_metadata as u32 & VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC != 0)
+            && baton.colourspace_pipeline != Interpretation::Cmyk
+            && baton.with_icc_profile.is_empty()
+            && has_profile(&image)
+        {
             image = image.icc_transform_with_opts(
                 processing_profile,
                 VOption::new()
@@ -1433,9 +1680,13 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 baton.extract_channel = image.get_bands() - 1;
             } else {
                 let mut error = baton.err.clone();
-                error.push_str(&format!("Cannot extract channel {:?} from  image with channels 0-{:?}", baton.extract_channel, (image.get_bands() - 1)));
+                error.push_str(&format!(
+                    "Cannot extract channel {:?} from  image with channels 0-{:?}",
+                    baton.extract_channel,
+                    (image.get_bands() - 1)
+                ));
 
-                return Err(OperationErrorExt(error));
+                return Err(OperationError(error));
             }
         }
         let colourspace_value = if is16_bit(image.get_interpretation()?) {
@@ -1444,7 +1695,9 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             Interpretation::BW
         };
         image = image.extract_band(baton.extract_channel)?;
-        image = image.copy_with_opts(VOption::new().set("interpretation", v_value!(colourspace_value as i32)))?;
+        image = image.copy_with_opts(
+            VOption::new().set("interpretation", v_value!(colourspace_value as i32)),
+        )?;
     }
 
     // Apply output ICC profile
@@ -1504,7 +1757,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     baton.width = image.get_width();
     baton.height = image.get_height();
 
-    image = set_animation_properties(image, n_pages, target_page_height, &baton.delay, baton.loop_)?;
+    image =
+        set_animation_properties(image, n_pages, target_page_height, &baton.delay, baton.loop_)?;
 
     if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
         baton.page_height_out = image.get_int(VIPS_META_PAGE_HEIGHT)?;
@@ -1514,12 +1768,18 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     write(image, input_image_type, baton)
 }
 
-fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineBaton) -> Result<PipelineBaton> {
+fn write(
+    mut image: VipsImage,
+    input_image_type: ImageType,
+    mut baton: PipelineBaton,
+) -> Result<PipelineBaton> {
     // Output
     set_timeout(&image, baton.timeout_seconds);
     if baton.file_out.is_empty() {
         // Buffer output
-        if baton.format_out == "jpeg" || (baton.format_out == "input" && input_image_type == ImageType::Jpeg) {
+        if baton.format_out == "jpeg"
+            || (baton.format_out == "input" && input_image_type == ImageType::Jpeg)
+        {
             assert_image_type_dimensions(&image, ImageType::Jpeg)?;
             let area = image.jpegsave_buffer_with_opts(
                 VOption::new()
@@ -1548,7 +1808,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             } else {
                 baton.channels = std::cmp::min(baton.channels, 3);
             }
-        } else if baton.format_out == "jp2" || (baton.format_out == "input" && input_image_type == ImageType::JP2) {
+        } else if baton.format_out == "jp2"
+            || (baton.format_out == "input" && input_image_type == ImageType::JP2)
+        {
             // Write JP2 to Buffer
             assert_image_type_dimensions(&image, ImageType::JP2)?;
             let area = image.jp2ksave_buffer_with_opts(
@@ -1569,7 +1831,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
 
             baton.buffer_out = area;
             baton.format_out = "jp2".to_string();
-        } else if baton.format_out == "png" || (baton.format_out == "input" && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG)) {
+        } else if baton.format_out == "png"
+            || (baton.format_out == "input"
+                && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG))
+        {
             // Write PNG to buffer
             assert_image_type_dimensions(&image, ImageType::Png)?;
             let area = image.pngsave_buffer_with_opts(
@@ -1601,7 +1866,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
 
             baton.buffer_out = area;
             baton.format_out = "png".to_string();
-        } else if baton.format_out == "webp" || (baton.format_out == "input" && input_image_type == ImageType::Webp) {
+        } else if baton.format_out == "webp"
+            || (baton.format_out == "input" && input_image_type == ImageType::Webp)
+        {
             // Write WEBP to buffer
             assert_image_type_dimensions(&image, ImageType::Webp)?;
             let area = image.webpsave_buffer_with_opts(
@@ -1620,7 +1887,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             )?;
             baton.buffer_out = area;
             baton.format_out = "webp".to_string();
-        } else if baton.format_out == "gif" || (baton.format_out == "input" && input_image_type == ImageType::GIF) {
+        } else if baton.format_out == "gif"
+            || (baton.format_out == "input" && input_image_type == ImageType::GIF)
+        {
             // Write GIF to buffer
             assert_image_type_dimensions(&image, ImageType::GIF)?;
             let area = image.gifsave_buffer_with_opts(
@@ -1636,7 +1905,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             )?;
             baton.buffer_out = area;
             baton.format_out = "gif".to_string();
-        } else if baton.format_out == "tiff" || (baton.format_out == "input" && input_image_type == ImageType::Tiff) {
+        } else if baton.format_out == "tiff"
+            || (baton.format_out == "input" && input_image_type == ImageType::Tiff)
+        {
             // Write TIFF to buffer
             if baton.tiff_compression == ForeignTiffCompression::Jpeg {
                 assert_image_type_dimensions(&image, ImageType::Jpeg)?;
@@ -1664,7 +1935,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             )?;
             baton.buffer_out = area;
             baton.format_out = "tiff".to_string();
-        } else if baton.format_out == "heif" || (baton.format_out == "input" && input_image_type == ImageType::HEIF) {
+        } else if baton.format_out == "heif"
+            || (baton.format_out == "input" && input_image_type == ImageType::HEIF)
+        {
             // Write HEIF to buffer
             assert_image_type_dimensions(&image, ImageType::HEIF)?;
             image = remove_animation_properties(image)?;
@@ -1717,7 +1990,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             let area = image.dzsave_buffer_with_opts(options)?;
             baton.buffer_out = area;
             baton.format_out = "dz".to_string();
-        } else if baton.format_out == "jxl" || (baton.format_out == "input" && input_image_type == ImageType::JXL) {
+        } else if baton.format_out == "jxl"
+            || (baton.format_out == "input" && input_image_type == ImageType::JXL)
+        {
             // Write JXL to buffer
             image = remove_animation_properties(image)?;
             let area = image.jxlsave_buffer_with_opts(
@@ -1730,7 +2005,9 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             )?;
             baton.buffer_out = area;
             baton.format_out = "jxl".to_string();
-        } else if baton.format_out == "raw" || (baton.format_out == "input" && input_image_type == ImageType::RAW) {
+        } else if baton.format_out == "raw"
+            || (baton.format_out == "input" && input_image_type == ImageType::RAW)
+        {
             // Write raw, uncompressed image data to buffer
             if baton.greyscale || image.get_interpretation()? == Interpretation::BW {
                 // Extract first band for greyscale image
@@ -1746,7 +2023,7 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             baton.buffer_out = area;
             if baton.buffer_out.is_empty() {
                 baton.err.push_str("Could not allocate enough memory for raw output");
-                return Err(OperationErrorExt(baton.err.clone()));
+                return Err(OperationError(baton.err.clone()));
             }
             baton.format_out = "raw".to_string();
         } else {
@@ -1758,7 +2035,7 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             } else {
                 baton.err.push_str(&baton.format_out);
             }
-            return Err(OperationErrorExt(baton.err.clone()));
+            return Err(OperationError(baton.err.clone()));
         }
     } else {
         // File output
@@ -1774,9 +2051,22 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
         let is_dz_zip = is_dz_zip(&baton.file_out);
         let is_v = is_v(&baton.file_out);
         let might_match_input = baton.format_out == "input";
-        let will_match_input = might_match_input && !(is_jpeg || is_png || is_webp || is_gif || is_tiff || is_jp2 || is_heif || is_dz || is_dz_zip || is_v);
+        let will_match_input = might_match_input
+            && !(is_jpeg
+                || is_png
+                || is_webp
+                || is_gif
+                || is_tiff
+                || is_jp2
+                || is_heif
+                || is_dz
+                || is_dz_zip
+                || is_v);
 
-        if baton.format_out == "jpeg" || (might_match_input && is_jpeg) || (will_match_input && input_image_type == ImageType::Jpeg) {
+        if baton.format_out == "jpeg"
+            || (might_match_input && is_jpeg)
+            || (will_match_input && input_image_type == ImageType::Jpeg)
+        {
             // Write JPEG to file
             assert_image_type_dimensions(&image, ImageType::Jpeg)?;
             image.jpegsave_with_opts(
@@ -1801,7 +2091,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             )?;
             baton.format_out = "jpeg".to_string();
             baton.channels = std::cmp::min(baton.channels, 3);
-        } else if baton.format_out == "jp2" || (might_match_input && is_jp2) || (will_match_input && input_image_type == ImageType::JP2) {
+        } else if baton.format_out == "jp2"
+            || (might_match_input && is_jp2)
+            || (will_match_input && input_image_type == ImageType::JP2)
+        {
             // Write JP2 to file
             assert_image_type_dimensions(&image, ImageType::JP2)?;
             image.jp2ksave_with_opts(
@@ -1821,7 +2114,11 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .set("tile_width", v_value!(baton.jp2_tile_width)),
             )?;
             baton.format_out = "jp2".to_string();
-        } else if baton.format_out == "png" || (might_match_input && is_png) || (will_match_input && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG)) {
+        } else if baton.format_out == "png"
+            || (might_match_input && is_png)
+            || (will_match_input
+                && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG))
+        {
             // Write PNG to file
             assert_image_type_dimensions(&image, ImageType::Png)?;
             image.pngsave_with_opts(
@@ -1852,7 +2149,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .set("dither", v_value!(baton.png_dither)),
             )?;
             baton.format_out = "png".to_string();
-        } else if baton.format_out == "webp" || (might_match_input && is_webp) || (will_match_input && input_image_type == ImageType::Webp) {
+        } else if baton.format_out == "webp"
+            || (might_match_input && is_webp)
+            || (will_match_input && input_image_type == ImageType::Webp)
+        {
             // Write WEBP to file
             assert_image_type_dimensions(&image, ImageType::Webp)?;
             image.webpsave_with_opts(
@@ -1871,7 +2171,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .set("alpha_q", v_value!(baton.webp_alpha_quality)),
             )?;
             baton.format_out = "webp".to_string();
-        } else if baton.format_out == "gif" || (might_match_input && is_gif) || (will_match_input && input_image_type == ImageType::GIF) {
+        } else if baton.format_out == "gif"
+            || (might_match_input && is_gif)
+            || (will_match_input && input_image_type == ImageType::GIF)
+        {
             // Write GIF to file
             assert_image_type_dimensions(&image, ImageType::GIF)?;
             image.gifsave_with_opts(
@@ -1885,7 +2188,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .set("dither", v_value!(baton.gif_dither)),
             )?;
             baton.format_out = "gif".to_string();
-        } else if baton.format_out == "tiff" || (might_match_input && is_tiff) || (will_match_input && input_image_type == ImageType::Tiff) {
+        } else if baton.format_out == "tiff"
+            || (might_match_input && is_tiff)
+            || (will_match_input && input_image_type == ImageType::Tiff)
+        {
             // Write TIFF to file
             if baton.tiff_compression == ForeignTiffCompression::Jpeg {
                 assert_image_type_dimensions(&image, ImageType::Jpeg)?;
@@ -1913,7 +2219,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .set("resunit", v_value!(baton.tiff_resolution_unit as i32)),
             )?;
             baton.format_out = "tiff".to_string();
-        } else if baton.format_out == "heif" || (might_match_input && is_heif) || (will_match_input && input_image_type == ImageType::HEIF) {
+        } else if baton.format_out == "heif"
+            || (might_match_input && is_heif)
+            || (will_match_input && input_image_type == ImageType::HEIF)
+        {
             // Write HEIF to file
             assert_image_type_dimensions(&image, ImageType::HEIF)?;
             image = remove_animation_properties(image)?;
@@ -1936,7 +2245,10 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
                     .set("lossless", v_value!(baton.heif_lossless)),
             )?;
             baton.format_out = "heif".to_string();
-        } else if baton.format_out == "jxl" || (might_match_input && is_jxl) || (will_match_input && input_image_type == ImageType::JXL) {
+        } else if baton.format_out == "jxl"
+            || (might_match_input && is_jxl)
+            || (will_match_input && input_image_type == ImageType::JXL)
+        {
             // Write JXL to file
             image = remove_animation_properties(image)?;
             image.jxlsave_with_opts(
@@ -1980,14 +2292,20 @@ fn write(mut image: VipsImage, input_image_type: ImageType, mut baton: PipelineB
             }
             image.dzsave_with_opts(&baton.file_out, options)?;
             baton.format_out = "dz".to_string();
-        } else if baton.format_out == "v" || (might_match_input && is_v) || (will_match_input && input_image_type == ImageType::VIPS) {
+        } else if baton.format_out == "v"
+            || (might_match_input && is_v)
+            || (will_match_input && input_image_type == ImageType::VIPS)
+        {
             // Write V to file
-            image.vipssave_with_opts(&baton.file_out, VOption::new().set("keep", v_value!(baton.keep_metadata)))?;
+            image.vipssave_with_opts(
+                &baton.file_out,
+                VOption::new().set("keep", v_value!(baton.keep_metadata)),
+            )?;
             baton.format_out = "v".to_string();
         } else {
             // Unsupported output format
             baton.err.push_str(&format!("Unsupported output format {}", baton.file_out));
-            return Err(OperationErrorExt(baton.err.clone()));
+            return Err(OperationError(baton.err.clone()));
         }
     };
 
@@ -2042,7 +2360,7 @@ fn calculate_angle_rotation(angle: i32) -> Angle {
 
 fn multi_page_unsupported(pages: i32, op: &str) -> Result<()> {
     if pages > 1 {
-        Err(OperationErrorExt(format!("{} is not supported for multi-page images", op)))
+        Err(OperationError(format!("{} is not supported for multi-page images", op)))
     } else {
         Ok(())
     }

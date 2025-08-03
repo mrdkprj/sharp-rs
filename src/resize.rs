@@ -14,9 +14,9 @@ pub enum Fit {
 #[derive(Debug, Clone, Default)]
 pub struct ResizeOptions {
     /** Alternative means of specifying width. If both are present self takes priority. */
-    pub width: Option<i32>,
+    pub width: i32,
     /** Alternative means of specifying height. If both are present self takes priority. */
-    pub height: Option<i32>,
+    pub height: i32,
     /** How the image should be resized to fit both provided dimensions, one of cover, contain, fill, inside or outside. (optional, default "cover") */
     pub fit: Option<Fit>,
     /** Position, gravity or strategy to use when fit is cover or contain. (optional, default "centre") */
@@ -67,6 +67,19 @@ pub struct TrimOptions {
     pub threshold: Option<f64>,
     /** Does the input more closely resemble line art (e.g. vector) rather than being photographic? (optional, default false) */
     pub line_art: Option<bool>,
+}
+
+#[derive(Debug, Clone, FromPrimitive, ToPrimitive)]
+pub enum Gravity {
+    Centre = 0,
+    North = 1,
+    East = 2,
+    South = 3,
+    West = 4,
+    Northeast = 5,
+    Southeast = 6,
+    Southwest = 7,
+    Northwest = 8,
 }
 
 #[derive(Debug, Clone, FromPrimitive, ToPrimitive)]
@@ -206,8 +219,8 @@ impl Sharp {
      */
     pub fn resize(self, width: i32, height: i32) -> Result<Self, String> {
         let options = ResizeOptions {
-            width: Some(width),
-            height: Some(height),
+            width,
+            height,
             ..Default::default()
         };
         self.resize_(options)
@@ -222,7 +235,9 @@ impl Sharp {
     }
 
     fn is_rotation_expected(&self) -> bool {
-        (self.options.angle % 360) != 0 || self.options.input.auto_orient || self.options.rotation_angle != 0.0
+        (self.options.angle % 360) != 0
+            || self.options.input.auto_orient
+            || self.options.rotation_angle != 0.0
     }
 
     fn resize_(mut self, options: ResizeOptions) -> Result<Self, String> {
@@ -232,30 +247,19 @@ impl Sharp {
         if self.options.width_post != -1 {
             println!("operation order will be: extract, resize, extract");
         }
-        if options.width.is_none() {
-            self.options.width = -1;
-        }
-
-        if options.height.is_none() {
-            self.options.height = -1;
-        }
 
         // Width
-        if let Some(width) = options.width {
-            if width > 0 {
-                self.options.width = width;
-            } else {
-                return Err(InvalidParameterError!("width", "positive integer", width));
-            }
+        if options.width > 0 {
+            self.options.width = options.width;
+        } else {
+            return Err(InvalidParameterError!("width", "positive integer", width));
         }
 
         // Height
-        if let Some(height) = options.height {
-            if height > 0 {
-                self.options.height = height;
-            } else {
-                return Err(InvalidParameterError!("height", "positive integer", height));
-            }
+        if options.height > 0 {
+            self.options.height = options.height;
+        } else {
+            return Err(InvalidParameterError!("height", "positive integer", height));
         }
 
         // Fit
@@ -275,7 +279,11 @@ impl Sharp {
             if in_range(position as _, 0.0, 8.0) || in_range(position as _, 16.0, 17.0) {
                 self.options.position = position;
             } else {
-                return Err(InvalidParameterError!("position", "valid position/gravity/strategy", position));
+                return Err(InvalidParameterError!(
+                    "position",
+                    "valid position/gravity/strategy",
+                    position
+                ));
             }
         }
 
@@ -411,7 +419,8 @@ impl Sharp {
     pub fn extract(mut self, region: Region) -> Result<Self, String> {
         let is_post = self.is_resize_expected() || self.options.width_pre != -1;
 
-        if (is_post && self.options.width_post != -1) || (!is_post && self.options.width_pre != -1) {
+        if (is_post && self.options.width_post != -1) || (!is_post && self.options.width_pre != -1)
+        {
             println!("ignoring previous extract options");
         }
 
@@ -428,7 +437,10 @@ impl Sharp {
         }
 
         // Ensure existing rotation occurs before pre-resize extraction
-        if self.is_rotation_expected() && !self.is_resize_expected() && (self.options.width_pre == -1 || self.options.width_post == -1) {
+        if self.is_rotation_expected()
+            && !self.is_resize_expected()
+            && (self.options.width_pre == -1 || self.options.width_post == -1)
+        {
             self.options.rotate_before_pre_extract = true;
         }
         Ok(self)

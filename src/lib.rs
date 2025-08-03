@@ -1,12 +1,16 @@
 use crate::{
-    operation::{AffineOptions, BlurOptions, BooleanOptions, ClaheOptions, FlattenOptions, KernelOptions, ModulateOptions, NegateOptions, NormaliseOptions, SharpenOptions, ThresholdOptions},
+    operation::{
+        AffineOptions, BlurOptions, BooleanOptions, ClaheOptions, FlattenOptions, KernelOptions,
+        ModulateOptions, NegateOptions, NormaliseOptions, SharpenOptions, ThresholdOptions,
+    },
     pipeline::{init_options, PipelineBaton},
 };
 use common::{rgba_from_hex, InputDescriptor};
 use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
 pub use libvips::ops::{
-    BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit,
-    ForeignWebpPreset, Interpretation, Kernel, OperationBoolean,
+    BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout,
+    ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit,
+    ForeignWebpPreset, Interpretation, Kernel, OperationBoolean, Precision,
 };
 use libvips::Vips;
 use std::path::Path;
@@ -27,7 +31,12 @@ mod util;
 
 macro_rules! InvalidParameterError {
     ($name:expr, $expected:expr, $actual:expr) => {
-        format!("Expected {:?} for {:?} but received {:?}", stringify!($expected), $name, stringify!($actual))
+        format!(
+            "Expected {:?} for {:?} but received {:?}",
+            stringify!($expected),
+            $name,
+            stringify!($actual)
+        )
     };
 }
 
@@ -76,14 +85,23 @@ impl Sharp {
         Self::new_sharp_from_file(filename, None)
     }
 
-    pub fn new_from_file_with_opts<P: AsRef<Path>>(filename: P, options: SharpOptions) -> Result<Self, String> {
+    pub fn new_from_file_with_opts<P: AsRef<Path>>(
+        filename: P,
+        options: SharpOptions,
+    ) -> Result<Self, String> {
         Self::new_sharp_from_file(filename, Some(options))
     }
 
-    fn new_sharp_from_file<P: AsRef<Path>>(filename: P, options: Option<SharpOptions>) -> Result<Self, String> {
+    fn new_sharp_from_file<P: AsRef<Path>>(
+        filename: P,
+        options: Option<SharpOptions>,
+    ) -> Result<Self, String> {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
         let mut all_options = init_options();
-        all_options.input = create_input_descriptor(Input::Path(filename.as_ref().to_string_lossy().to_string()), options)?;
+        all_options.input = create_input_descriptor(
+            Input::Path(filename.as_ref().to_string_lossy().to_string()),
+            options,
+        )?;
         Ok(Self {
             options: all_options,
         })
@@ -93,11 +111,17 @@ impl Sharp {
         Self::new_sharp_from_files(files, None)
     }
 
-    pub fn new_from_files_with_opts<P: AsRef<Path>>(files: &[P], options: SharpOptions) -> Result<Self, String> {
+    pub fn new_from_files_with_opts<P: AsRef<Path>>(
+        files: &[P],
+        options: SharpOptions,
+    ) -> Result<Self, String> {
         Self::new_sharp_from_files(files, Some(options))
     }
 
-    fn new_sharp_from_files<P: AsRef<Path>>(files: &[P], options: Option<SharpOptions>) -> Result<Self, String> {
+    fn new_sharp_from_files<P: AsRef<Path>>(
+        files: &[P],
+        options: Option<SharpOptions>,
+    ) -> Result<Self, String> {
         if files.len() <= 1 {
             return Err("Expected at least two images to join".to_string());
         }
@@ -105,7 +129,15 @@ impl Sharp {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
         let mut all_options = init_options();
         // Join images together
-        let join: Result<Vec<InputDescriptor>, String> = files.iter().map(|file| create_input_descriptor(Input::Path(file.as_ref().to_string_lossy().to_string()), options.clone())).collect();
+        let join: Result<Vec<InputDescriptor>, String> = files
+            .iter()
+            .map(|file| {
+                create_input_descriptor(
+                    Input::Path(file.as_ref().to_string_lossy().to_string()),
+                    options.clone(),
+                )
+            })
+            .collect();
         all_options.join = join?;
 
         Ok(Self {
@@ -117,11 +149,17 @@ impl Sharp {
         Self::new_sharp_from_buffer(buffer, None)
     }
 
-    pub fn new_from_buffer_with_opts(buffer: Vec<u8>, options: SharpOptions) -> Result<Self, String> {
+    pub fn new_from_buffer_with_opts(
+        buffer: Vec<u8>,
+        options: SharpOptions,
+    ) -> Result<Self, String> {
         Self::new_sharp_from_buffer(buffer, Some(options))
     }
 
-    fn new_sharp_from_buffer(buffer: Vec<u8>, options: Option<SharpOptions>) -> Result<Self, String> {
+    fn new_sharp_from_buffer(
+        buffer: Vec<u8>,
+        options: Option<SharpOptions>,
+    ) -> Result<Self, String> {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
         let mut all_options = init_options();
         all_options.input = create_input_descriptor(Input::Buffer(buffer), options)?;
@@ -135,11 +173,17 @@ impl Sharp {
         Self::new_sharp_from_buffers(buffers, None)
     }
 
-    pub fn new_from_buffers_with_opts(buffers: Vec<Vec<u8>>, options: SharpOptions) -> Result<Self, String> {
+    pub fn new_from_buffers_with_opts(
+        buffers: Vec<Vec<u8>>,
+        options: SharpOptions,
+    ) -> Result<Self, String> {
         Self::new_sharp_from_buffers(buffers, Some(options))
     }
 
-    fn new_sharp_from_buffers(buffers: Vec<Vec<u8>>, options: Option<SharpOptions>) -> Result<Self, String> {
+    fn new_sharp_from_buffers(
+        buffers: Vec<Vec<u8>>,
+        options: Option<SharpOptions>,
+    ) -> Result<Self, String> {
         if buffers.len() <= 1 {
             return Err("Expected at least two images to join".to_string());
         }
@@ -147,7 +191,10 @@ impl Sharp {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
         let mut all_options = init_options();
         // Join images together
-        let join: Result<Vec<InputDescriptor>, String> = buffers.iter().map(|buffer| create_input_descriptor(Input::Buffer(buffer.to_vec()), options.clone())).collect();
+        let join: Result<Vec<InputDescriptor>, String> = buffers
+            .iter()
+            .map(|buffer| create_input_descriptor(Input::Buffer(buffer.to_vec()), options.clone()))
+            .collect();
         all_options.join = join?;
 
         Ok(Self {
@@ -287,7 +334,11 @@ impl Sharp {
      *   .pipe(pipeline);
      *
      */
-    pub fn affine(mut self, matrix: Vec<Vec<f64>>, options: Option<AffineOptions>) -> Result<Self, String> {
+    pub fn affine(
+        mut self,
+        matrix: Vec<Vec<f64>>,
+        options: Option<AffineOptions>,
+    ) -> Result<Self, String> {
         let flat_matrix: Vec<f64> = matrix.into_iter().flatten().collect();
         if flat_matrix.len() == 4 {
             self.options.affine_matrix = flat_matrix;
@@ -351,37 +402,61 @@ impl Sharp {
     pub fn sharpen(mut self, options: Option<SharpenOptions>) -> Result<Self, String> {
         if let Some(options) = options {
             if !in_range(options.sigma, 0.000001, 10.0) {
-                return Err(InvalidParameterError!("options.sigma", "number between 0.000001 and 10", options.sigma));
+                return Err(InvalidParameterError!(
+                    "options.sigma",
+                    "number between 0.000001 and 10",
+                    options.sigma
+                ));
             }
             self.options.sharpen_sigma = options.sigma;
 
             if let Some(m1) = options.m1 {
                 if !in_range(m1, 0.0, 1000000.0) {
-                    return Err(InvalidParameterError!("options.m1", "number between 0 and 1000000", options.m1));
+                    return Err(InvalidParameterError!(
+                        "options.m1",
+                        "number between 0 and 1000000",
+                        options.m1
+                    ));
                 }
                 self.options.sharpen_m1 = m1;
             }
             if let Some(m2) = options.m2 {
                 if !in_range(m2, 0.0, 1000000.0) {
-                    return Err(InvalidParameterError!("options.m12", "number between 0 and 1000000", options.m2));
+                    return Err(InvalidParameterError!(
+                        "options.m12",
+                        "number between 0 and 1000000",
+                        options.m2
+                    ));
                 }
                 self.options.sharpen_m2 = m2;
             }
             if let Some(x1) = options.x1 {
                 if !in_range(x1, 0.0, 1000000.0) {
-                    return Err(InvalidParameterError!("options.x1", "number between 0 and 1000000", options.x1));
+                    return Err(InvalidParameterError!(
+                        "options.x1",
+                        "number between 0 and 1000000",
+                        options.x1
+                    ));
                 }
                 self.options.sharpen_x1 = x1;
             }
             if let Some(y2) = options.y2 {
                 if !in_range(y2, 0.0, 1000000.0) {
-                    return Err(InvalidParameterError!("options.y2", "number between 0 and 1000000", options.y2));
+                    return Err(InvalidParameterError!(
+                        "options.y2",
+                        "number between 0 and 1000000",
+                        options.y2
+                    ));
                 }
                 self.options.sharpen_y2 = y2;
             }
             if let Some(y3) = options.y3 {
                 if !in_range(y3, 0.0, 1000000.0) {
-                    return Err(InvalidParameterError!("options.y3", "number between 0 and 1000000", options.y3));
+                    return Err(InvalidParameterError!(
+                        "options.y3",
+                        "number between 0 and 1000000",
+                        options.y3
+                    ));
                 }
                 self.options.sharpen_y3 = y3;
             }
@@ -435,7 +510,11 @@ impl Sharp {
     pub fn blur(mut self, options: Option<BlurOptions>) -> Result<Self, String> {
         if let Some(options) = options {
             if !in_range(options.sigma, 0.3, 1000.0) {
-                return Err(InvalidParameterError!("options.sigma", "number between 0.3 and 1000", sigma));
+                return Err(InvalidParameterError!(
+                    "options.sigma",
+                    "number between 0.3 and 1000",
+                    sigma
+                ));
             }
             self.options.blur_sigma = options.sigma;
             if let Some(precision) = options.precision {
@@ -443,7 +522,11 @@ impl Sharp {
             }
             if let Some(min_amplitude) = options.min_amplitude {
                 if !in_range(min_amplitude, 0.001, 1.0) {
-                    return Err(InvalidParameterError!("min_amplitude", "number between 0.001 and 1", min_amplitude));
+                    return Err(InvalidParameterError!(
+                        "min_amplitude",
+                        "number between 0.001 and 1",
+                        min_amplitude
+                    ));
                 }
                 self.options.min_ampl = min_amplitude;
             }
@@ -567,7 +650,11 @@ impl Sharp {
 
         if let Some(gamma_out) = gamma_out {
             if !in_range(gamma_out, 1.0, 3.0) {
-                return Err(InvalidParameterError!("gamma_out", "number between 1.0 and 3.0", gamma_out));
+                return Err(InvalidParameterError!(
+                    "gamma_out",
+                    "number between 1.0 and 3.0",
+                    gamma_out
+                ));
             }
             self.options.gamma_out = gamma_out;
         } else {
@@ -638,7 +725,11 @@ impl Sharp {
         }
 
         if self.options.normalise_lower >= self.options.normalise_upper {
-            return Err(InvalidParameterError!("range", "lower to be less than upper", format!("{:?} >= {:?}", self.options.normaliseLower, self.options.normaliseUpper)));
+            return Err(InvalidParameterError!(
+                "range",
+                "lower to be less than upper",
+                format!("{:?} >= {:?}", self.options.normaliseLower, self.options.normaliseUpper)
+            ));
         }
         self.options.normalise = true;
         Ok(self)
@@ -666,16 +757,28 @@ impl Sharp {
             if options.width > 0 {
                 self.options.clahe_width = options.width;
             } else {
-                return Err(InvalidParameterError!("width", "integer greater than zero", options.width));
+                return Err(InvalidParameterError!(
+                    "width",
+                    "integer greater than zero",
+                    options.width
+                ));
             }
             if options.height > 0 {
                 self.options.clahe_height = options.height;
             } else {
-                return Err(InvalidParameterError!("height", "integer greater than zero", options.height));
+                return Err(InvalidParameterError!(
+                    "height",
+                    "integer greater than zero",
+                    options.height
+                ));
             }
             if let Some(max_slope) = options.max_slope {
                 if !in_range(max_slope as _, 0.0, 100.0) {
-                    return Err(InvalidParameterError!("max_slope", "integer between 0 and 100", max_slope));
+                    return Err(InvalidParameterError!(
+                        "max_slope",
+                        "integer between 0 and 100",
+                        max_slope
+                    ));
                 }
                 self.options.clahe_max_slope = max_slope;
             }
@@ -702,7 +805,10 @@ impl Sharp {
      *
      */
     pub fn convolve(mut self, kernel: KernelOptions) -> Result<Self, String> {
-        if !in_range(kernel.width as _, 3.0, 1001.0) || !in_range(kernel.height as _, 3.0, 1001.0) || kernel.height * kernel.width != kernel.kernel.len() as i32 {
+        if !in_range(kernel.width as _, 3.0, 1001.0)
+            || !in_range(kernel.height as _, 3.0, 1001.0)
+            || kernel.height * kernel.width != kernel.kernel.len() as i32
+        {
             return Err("Invalid convolution kernel".to_string());
         }
         // Default scale is sum of kernel values
@@ -734,10 +840,18 @@ impl Sharp {
     /**
      * Any pixel value greater than or equal to the threshold value will be set to 255, otherwise it will be set to 0.
      */
-    pub fn threshold(mut self, threshold: Option<i32>, options: Option<ThresholdOptions>) -> Result<Self, String> {
+    pub fn threshold(
+        mut self,
+        threshold: Option<i32>,
+        options: Option<ThresholdOptions>,
+    ) -> Result<Self, String> {
         if let Some(threshold) = threshold {
             if !in_range(threshold as _, 0.0, 255.0) {
-                return Err(InvalidParameterError!("threshold", "integer between 0 and 255", threshold));
+                return Err(InvalidParameterError!(
+                    "threshold",
+                    "integer between 0 and 255",
+                    threshold
+                ));
             }
             self.options.threshold = threshold;
         } else {
@@ -762,7 +876,12 @@ impl Sharp {
      * the selected bitwise boolean `operation` between the corresponding pixels of the input images.
      *
      */
-    pub fn boolean(mut self, operand: Input, operator: OperationBoolean, options: Option<BooleanOptions>) -> Result<Self, String> {
+    pub fn boolean(
+        mut self,
+        operand: Input,
+        operator: OperationBoolean,
+        options: Option<BooleanOptions>,
+    ) -> Result<Self, String> {
         let mut sharp_options = SharpOptions::default();
         if let Some(options) = options {
             sharp_options.raw = Some(CreateRaw {
@@ -772,7 +891,8 @@ impl Sharp {
                 premultiplied: false,
             });
         }
-        self.options.boolean_descriptor = Some(create_input_descriptor(operand, Some(sharp_options))?);
+        self.options.boolean_descriptor =
+            Some(create_input_descriptor(operand, Some(sharp_options))?);
 
         self.options.boolean_op = operator;
 
@@ -848,7 +968,11 @@ impl Sharp {
         }
         let recomb_matrix: Vec<f64> = input_matrix.into_iter().flatten().collect();
         if recomb_matrix.len() != 9 && recomb_matrix.len() != 16 {
-            return Err(InvalidParameterError!("recomb_matrix", "cardinality of 9 or 16", recomb_matrix.len()));
+            return Err(InvalidParameterError!(
+                "recomb_matrix",
+                "cardinality of 9 or 16",
+                recomb_matrix.len()
+            ));
         }
         self.options.recomb_matrix = recomb_matrix;
         Ok(self)
@@ -900,13 +1024,21 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(brightness) = options.brightness {
                 if brightness < 0.0 {
-                    return Err(InvalidParameterError!("brightness", "number above zero", brightness));
+                    return Err(InvalidParameterError!(
+                        "brightness",
+                        "number above zero",
+                        brightness
+                    ));
                 }
                 self.options.brightness = brightness;
             }
             if let Some(saturation) = options.saturation {
                 if saturation < 0.0 {
-                    return Err(InvalidParameterError!("saturation", "number above zero", saturation));
+                    return Err(InvalidParameterError!(
+                        "saturation",
+                        "number above zero",
+                        saturation
+                    ));
                 }
                 self.options.saturation = saturation;
             }

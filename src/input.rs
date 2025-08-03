@@ -1,10 +1,13 @@
 use crate::{
-    common::{determine_image_type, determine_image_type_from_str, image_type_supports_page, image_type_supports_unlimited, set_density, ImageType, InputDescriptor},
+    common::{
+        determine_image_type, determine_image_type_from_str, image_type_supports_page,
+        image_type_supports_unlimited, set_density, ImageType, InputDescriptor,
+    },
     in_range, Colour, InvalidParameterError,
 };
 use libvips::{
     bindings::vips_band_format_is8bit,
-    error::Error::{OperationError, OperationErrorExt},
+    error::Error::OperationError,
     ops::{Align, BandFormat, FailOn, Interpretation, TextWrap},
     v_value,
     voption::VOption,
@@ -16,6 +19,12 @@ pub enum Input {
     Path(String),
     Buffer(Vec<u8>),
     None(),
+}
+
+impl Default for Input {
+    fn default() -> Self {
+        Input::None()
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -37,13 +46,6 @@ pub struct SharpOptions {
     pub create: Option<Create>,
     pub text: Option<CreateText>,
     pub join: Option<Join>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Raw {
-    pub width: i32,
-    pub height: i32,
-    pub channels: u32,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -153,7 +155,10 @@ pub struct RotateOptions {
     pub background: Colour,
 }
 
-pub(crate) fn create_input_descriptor(input: Input, input_options: Option<SharpOptions>) -> core::result::Result<InputDescriptor, String> {
+pub(crate) fn create_input_descriptor(
+    input: Input,
+    input_options: Option<SharpOptions>,
+) -> core::result::Result<InputDescriptor, String> {
     let mut input_descriptor = InputDescriptor {
         auto_orient: false,
         fail_on: FailOn::Warning,
@@ -206,7 +211,11 @@ pub(crate) fn create_input_descriptor(input: Input, input_options: Option<SharpO
         // Raw pixel input
         if let Some(raw) = input_options.raw {
             if !in_range(raw.channels as _, 1.0, 4.0) {
-                return Err(InvalidParameterError!("raw.channels", "number between 1 and 4", raw.channels));
+                return Err(InvalidParameterError!(
+                    "raw.channels",
+                    "number between 1 and 4",
+                    raw.channels
+                ));
             }
 
             input_descriptor.raw_width = raw.width;
@@ -250,7 +259,11 @@ pub(crate) fn create_input_descriptor(input: Input, input_options: Option<SharpO
             // Noise
             if let Some(noise) = create.noise {
                 if !in_range(create.channels as _, 1.0, 4.0) {
-                    return Err(InvalidParameterError!("create.channels", "number between 1 and 4", create.channels));
+                    return Err(InvalidParameterError!(
+                        "create.channels",
+                        "number between 1 and 4",
+                        create.channels
+                    ));
                 }
                 if let Some(gaussian) = noise.gaussian {
                     if gaussian {
@@ -265,7 +278,11 @@ pub(crate) fn create_input_descriptor(input: Input, input_options: Option<SharpO
                 }
             } else {
                 if !in_range(create.channels as _, 3.0, 4.0) {
-                    return Err(InvalidParameterError!("create.channels", "number between 3 and 4", create.channels));
+                    return Err(InvalidParameterError!(
+                        "create.channels",
+                        "number between 3 and 4",
+                        create.channels
+                    ));
                 }
                 input_descriptor.create_background = create.background.rgba;
             }
@@ -368,7 +385,9 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
                 bands.push(VipsImage::gaussnoise_with_opts(
                     descriptor.create_width,
                     descriptor.create_height,
-                    VOption::new().set("mean", v_value!(descriptor.create_noise_mean)).set("sigma", v_value!(descriptor.create_noise_sigma)),
+                    VOption::new()
+                        .set("mean", v_value!(descriptor.create_noise_mean))
+                        .set("sigma", v_value!(descriptor.create_noise_sigma)),
                 )?);
             }
             let image = VipsImage::bandjoin(bands.as_mut_slice())?;
@@ -377,9 +396,15 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
             } else {
                 Interpretation::Srgb
             };
-            image.copy_with_opts(VOption::new().set("interpretation", v_value!(interpretation as i32)))?
+            image.copy_with_opts(
+                VOption::new().set("interpretation", v_value!(interpretation as i32)),
+            )?
         } else {
-            let mut background = vec![descriptor.create_background[0], descriptor.create_background[1], descriptor.create_background[2]];
+            let mut background = vec![
+                descriptor.create_background[0],
+                descriptor.create_background[1],
+                descriptor.create_background[2],
+            ];
             if channels == 4 {
                 background.push(descriptor.create_background[3]);
             }
@@ -390,7 +415,9 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
             } else {
                 Interpretation::Srgb
             };
-            let image = image.copy_with_opts(VOption::new().set("interpretation", v_value!(interpretation as i32)))?;
+            let image = image.copy_with_opts(
+                VOption::new().set("interpretation", v_value!(interpretation as i32)),
+            )?;
             VipsImage::new_from_image(&image, &background)?
         };
 
@@ -427,7 +454,12 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
         if descriptor.text_rgba {
             (image, ImageType::RAW)
         } else {
-            (image.copy_with_opts(VOption::new().set("interpretation", v_value!(Interpretation::BW as i32)))?, ImageType::RAW)
+            (
+                image.copy_with_opts(
+                    VOption::new().set("interpretation", v_value!(Interpretation::BW as i32)),
+                )?,
+                ImageType::RAW,
+            )
         }
     } else {
         // From filesystem
@@ -435,13 +467,18 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
 
         if image_type == ImageType::MISSING {
             if descriptor.file.contains("<svg") {
-                let msg = format!("Input file is missing, did you mean Buffer.from('{:?}')", descriptor.file[0..8].to_string());
-                return Err(OperationErrorExt(msg));
+                let msg = format!(
+                    "Input file is missing, did you mean Buffer.from('{:?}')",
+                    descriptor.file[0..8].to_string()
+                );
+                return Err(OperationError(msg));
             }
-            return Err(OperationErrorExt(format!("Input file is missing: {}", descriptor.file)));
+            return Err(OperationError(format!("Input file is missing: {}", descriptor.file)));
         }
         if image_type != ImageType::UNKNOWN {
-            let mut option = VOption::new().set("access", v_value!(descriptor.access as i32)).set("fail_on", v_value!(descriptor.fail_on as i32));
+            let mut option = VOption::new()
+                .set("access", v_value!(descriptor.access as i32))
+                .set("fail_on", v_value!(descriptor.fail_on as i32));
 
             if descriptor.unlimited && image_type_supports_unlimited(&image_type) {
                 option.add("unlimited", v_value!(true));
@@ -459,12 +496,14 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
                     option.add("stylesheet", v_value!(&descriptor.svg_stylesheet));
                     option.add("high_bitdepth", v_value!(descriptor.svg_high_bitdepth))
                 }
-                ImageType::Tiff => option.add("tiffSubifd", v_value!(descriptor.tiff_subifd)),
+                ImageType::Tiff => option.add("subifd", v_value!(descriptor.tiff_subifd)),
                 ImageType::PDF => {
                     option.add("dpi", v_value!(descriptor.density));
                     option.add("background", v_value!(descriptor.pdf_background.as_slice()))
                 }
-                ImageType::OPENSLIDE => option.add("openSlideLevel", v_value!(descriptor.open_slide_level)),
+                ImageType::OPENSLIDE => {
+                    option.add("openSlideLevel", v_value!(descriptor.open_slide_level))
+                }
                 ImageType::JP2 => option.add("oneshot", v_value!(descriptor.jp2_oneshot)),
                 ImageType::MAGICK => option.add("density", v_value!(&density)),
                 _ => {}
@@ -472,29 +511,43 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
 
             let image = VipsImage::new_from_file_with_opts(&descriptor.file, option)?;
 
-            if image_type == ImageType::SVG || image_type == ImageType::PDF || image_type == ImageType::MAGICK {
+            if image_type == ImageType::SVG
+                || image_type == ImageType::PDF
+                || image_type == ImageType::MAGICK
+            {
                 (set_density(image, descriptor.density)?, image_type)
             } else {
                 (image, image_type)
             }
         } else {
-            return Err(OperationError("Input file contains unsupported image format"));
+            return Err(OperationError("Input file contains unsupported image format".to_string()));
         }
     };
 
     // Limit input images to a given number of pixels, where pixels = width * height
-    if descriptor.limit_input_pixels > 0 && image.get_width() * image.get_height() > descriptor.limit_input_pixels as i32 {
-        return Err(OperationError("Input image exceeds pixel limit"));
+    if descriptor.limit_input_pixels > 0
+        && image.get_width() * image.get_height() > descriptor.limit_input_pixels as i32
+    {
+        return Err(OperationError("Input image exceeds pixel limit".to_string()));
     }
 
     Ok((image, image_type))
 }
 
-pub(crate) fn open_input_from_buffer(descriptor: &InputDescriptor) -> Result<(VipsImage, ImageType)> {
+pub(crate) fn open_input_from_buffer(
+    descriptor: &InputDescriptor,
+) -> Result<(VipsImage, ImageType)> {
     let (image, image_type) = if descriptor.raw_channels > 0 {
         // Raw, uncompressed pixel data
         let is8bit = unsafe { vips_band_format_is8bit(descriptor.raw_depth as _) } == 1;
-        let image = VipsImage::new_from_memory(descriptor.buffer.as_slice(), descriptor.raw_width, descriptor.raw_height, descriptor.raw_channels, descriptor.raw_depth)?;
+
+        let image = VipsImage::new_from_memory(
+            descriptor.buffer.as_slice(),
+            descriptor.raw_width,
+            descriptor.raw_height,
+            descriptor.raw_channels,
+            descriptor.raw_depth,
+        )?;
         let image = if descriptor.raw_channels < 3 {
             image.colourspace(if is8bit {
                 Interpretation::BW
@@ -518,7 +571,9 @@ pub(crate) fn open_input_from_buffer(descriptor: &InputDescriptor) -> Result<(Vi
         // Compressed data
         let image_type = determine_image_type(&descriptor.buffer);
         if image_type != ImageType::UNKNOWN {
-            let mut option = VOption::new().set("access", v_value!(descriptor.access as i32)).set("fail_on", v_value!(descriptor.fail_on as i32));
+            let mut option = VOption::new()
+                .set("access", v_value!(descriptor.access as i32))
+                .set("fail_on", v_value!(descriptor.fail_on as i32));
 
             if descriptor.unlimited && image_type_supports_unlimited(&image_type) {
                 option.add("unlimited", v_value!(true));
@@ -541,25 +596,34 @@ pub(crate) fn open_input_from_buffer(descriptor: &InputDescriptor) -> Result<(Vi
                     option.add("dpi", v_value!(descriptor.density));
                     option.add("background", v_value!(descriptor.pdf_background.as_slice()))
                 }
-                ImageType::OPENSLIDE => option.add("openSlideLevel", v_value!(descriptor.open_slide_level)),
+                ImageType::OPENSLIDE => {
+                    option.add("openSlideLevel", v_value!(descriptor.open_slide_level))
+                }
                 ImageType::JP2 => option.add("oneshot", v_value!(descriptor.jp2_oneshot)),
                 ImageType::MAGICK => option.add("density", v_value!(&density)),
                 _ => {}
             };
             let image = VipsImage::new_from_buffer_with_opts(descriptor.buffer.as_slice(), option)?;
-            if image_type == ImageType::SVG || image_type == ImageType::PDF || image_type == ImageType::MAGICK {
+            if image_type == ImageType::SVG
+                || image_type == ImageType::PDF
+                || image_type == ImageType::MAGICK
+            {
                 (set_density(image, descriptor.density)?, image_type)
             } else {
                 (image, image_type)
             }
         } else {
-            return Err(OperationError("Input buffer contains unsupported image format"));
+            return Err(OperationError(
+                "Input buffer contains unsupported image format".to_string(),
+            ));
         }
     };
 
     // Limit input images to a given number of pixels, where pixels = width * height
-    if descriptor.limit_input_pixels > 0 && image.get_width() * image.get_height() > descriptor.limit_input_pixels as i32 {
-        return Err(OperationError("Input image exceeds pixel limit"));
+    if descriptor.limit_input_pixels > 0
+        && image.get_width() * image.get_height() > descriptor.limit_input_pixels as i32
+    {
+        return Err(OperationError("Input image exceeds pixel limit".to_string()));
     }
 
     Ok((image, image_type))

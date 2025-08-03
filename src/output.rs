@@ -3,7 +3,10 @@ use crate::{
     metadata::{get_metadata, Metadata},
     pipeline, Colour, InvalidParameterError, Sharp,
 };
-use libvips::ops::{BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset};
+use libvips::ops::{
+    BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression,
+    ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
+};
 use num_derive::{FromPrimitive, ToPrimitive};
 use std::{collections::HashMap, path::Path};
 
@@ -343,7 +346,11 @@ impl PngOptions {
             return palette;
         }
 
-        if self.quality.is_some() || self.effort.is_some() || self.colours.is_some() || self.dither.is_some() {
+        if self.quality.is_some()
+            || self.effort.is_some()
+            || self.colours.is_some()
+            || self.dither.is_some()
+        {
             return true;
         }
 
@@ -400,28 +407,29 @@ impl Sharp {
      * The caller is responsible for ensuring directory structures and permissions exist.
      *
      */
-    pub fn to_file<P: AsRef<Path>>(mut self, file_out: P) -> Result<Self, String> {
+    pub fn to_file<P: AsRef<Path>>(mut self, file_out: P) -> Result<(), String> {
         let file_out_string = file_out.as_ref().to_string_lossy().to_string();
         if self.options.input.file == file_out_string {
             return Err("Cannot use same file for input and output".to_string());
         }
         self.options.file_out = file_out_string;
-        let baton = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
-        self.options = baton;
+        let _ = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
 
-        Ok(self)
+        Ok(())
     }
 
-    pub async fn to_file_async<P: AsRef<Path>>(mut self, file_out: P) -> Result<Self, String> {
+    pub async fn to_file_async<P: AsRef<Path>>(mut self, file_out: P) -> Result<(), String> {
         let file_out_string = file_out.as_ref().to_string_lossy().to_string();
         if self.options.input.file == file_out_string {
             return Err("Cannot use same file for input and output".to_string());
         }
         self.options.file_out = file_out_string;
-        let baton = async_std::task::spawn(async move { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
-        self.options = baton;
+        let _ = async_std::task::spawn(async move {
+            pipeline::pipline(self.options).map_err(|e| e.to_string())
+        })
+        .await?;
 
-        Ok(self)
+        Ok(())
     }
 
     /**
@@ -439,15 +447,16 @@ impl Sharp {
     pub fn to_buffer(mut self) -> Result<Vec<u8>, String> {
         self.options.file_out = String::new();
         let baton = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
-        self.options = baton;
-        Ok(self.options.buffer_out)
+        Ok(baton.buffer_out)
     }
 
     pub async fn to_buffer_async(mut self) -> Result<Vec<u8>, String> {
         self.options.file_out = String::new();
-        let baton = async_std::task::spawn(async move { pipeline::pipline(self.options).map_err(|e| e.to_string()) }).await?;
-        self.options = baton;
-        Ok(self.options.buffer_out)
+        let baton = async_std::task::spawn(async move {
+            pipeline::pipline(self.options).map_err(|e| e.to_string())
+        })
+        .await?;
+        Ok(baton.buffer_out)
     }
 
     /**
@@ -511,7 +520,9 @@ impl Sharp {
 
     fn apply_exif(&mut self, ifd: &str, values: HashMap<String, String>) {
         for (k, v) in values {
-            self.options.with_exif.insert(format!("exif-{:?}-{:?}", ifd.to_ascii_lowercase(), k), v);
+            self.options
+                .with_exif
+                .insert(format!("exif-{:?}-{:?}", ifd.to_ascii_lowercase(), k), v);
         }
     }
 
@@ -640,7 +651,11 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(orientation) = options.orientation {
                 if !in_range(orientation as _, 1.0, 8.0) {
-                    return Err(InvalidParameterError!("orientation", "integer between 1 and 8", orientation));
+                    return Err(InvalidParameterError!(
+                        "orientation",
+                        "integer between 1 and 8",
+                        orientation
+                    ));
                 }
                 self.options.with_metadata_orientation = orientation;
             }
@@ -664,7 +679,11 @@ impl Sharp {
      *   .toBuffer();
      *
      */
-    pub fn to_format(self, format: FormatEnum, options: Option<FormatOptions>) -> Result<Self, String> {
+    pub fn to_format(
+        self,
+        format: FormatEnum,
+        options: Option<FormatOptions>,
+    ) -> Result<Self, String> {
         let options = options.unwrap_or_default();
 
         match format {
@@ -706,7 +725,11 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
-                    return Err(InvalidParameterError!("quality", "integer between 1 and 100", quality));
+                    return Err(InvalidParameterError!(
+                        "quality",
+                        "integer between 1 and 100",
+                        quality
+                    ));
                 }
                 self.options.jpeg_quality = quality;
             }
@@ -747,7 +770,11 @@ impl Sharp {
 
             if let Some(quantisation_table) = options.quantisation_table {
                 if !in_range(quantisation_table as _, 0.0, 8.0) {
-                    return Err(InvalidParameterError!("quantisationTable", "integer between 0 and 8", quantisationTable));
+                    return Err(InvalidParameterError!(
+                        "quantisationTable",
+                        "integer between 0 and 8",
+                        quantisationTable
+                    ));
                 }
                 self.options.jpeg_quantisation_table = quantisation_table;
             }
@@ -812,7 +839,11 @@ impl Sharp {
             }
             if let Some(compression_level) = options.compression_level {
                 if !in_range(compression_level as _, 0.0, 9.0) {
-                    return Err(InvalidParameterError!("compressionLevel", "integer between 0 and 9", compressionLevel));
+                    return Err(InvalidParameterError!(
+                        "compressionLevel",
+                        "integer between 0 and 9",
+                        compressionLevel
+                    ));
                 }
                 self.options.png_compression_level = compression_level;
             }
@@ -822,7 +853,11 @@ impl Sharp {
 
             if let Some(colors) = options.colours {
                 if !in_range(colors as _, 2.0, 256.0) {
-                    return Err(InvalidParameterError!("colours", "integer between 2 and 256", colors));
+                    return Err(InvalidParameterError!(
+                        "colours",
+                        "integer between 2 and 256",
+                        colors
+                    ));
                 }
                 self.options.png_bitdepth = Self::bitdepth_from_colour_count(colors as _) as _;
             }
@@ -831,19 +866,31 @@ impl Sharp {
             if self.options.png_palette {
                 if let Some(quality) = options.quality {
                     if !in_range(quality as _, 0.0, 100.0) {
-                        return Err(InvalidParameterError!("quality", "integer between 0 and 100", quality));
+                        return Err(InvalidParameterError!(
+                            "quality",
+                            "integer between 0 and 100",
+                            quality
+                        ));
                     }
                     self.options.png_quality = quality;
                 }
                 if let Some(effort) = options.effort {
                     if !in_range(effort as _, 1.0, 10.0) {
-                        return Err(InvalidParameterError!("effort", "integer between 1 and 10", effort));
+                        return Err(InvalidParameterError!(
+                            "effort",
+                            "integer between 1 and 10",
+                            effort
+                        ));
                     }
                     self.options.png_effort = effort;
                 }
                 if let Some(dither) = options.dither {
                     if !in_range(dither, 0.0, 1.0) {
-                        return Err(InvalidParameterError!("dither", "number between 0.0 and 1.0", dither));
+                        return Err(InvalidParameterError!(
+                            "dither",
+                            "number between 0.0 and 1.0",
+                            dither
+                        ));
                     }
                     self.options.png_dither = dither;
                 }
@@ -881,13 +928,21 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
-                    return Err(InvalidParameterError!("quality", "integer between 1 and 100", quality));
+                    return Err(InvalidParameterError!(
+                        "quality",
+                        "integer between 1 and 100",
+                        quality
+                    ));
                 }
                 self.options.webp_quality = quality;
             }
             if let Some(alpha_quality) = options.alpha_quality {
                 if !in_range(alpha_quality as _, 0.0, 100.0) {
-                    return Err(InvalidParameterError!("alphaQuality", "integer between 0 and 100", alphaQuality));
+                    return Err(InvalidParameterError!(
+                        "alphaQuality",
+                        "integer between 0 and 100",
+                        alphaQuality
+                    ));
                 }
                 self.options.webp_alpha_quality = alpha_quality;
             }
@@ -905,8 +960,17 @@ impl Sharp {
             }
             if let Some(preset) = options.preset {
                 match preset {
-                    ForeignWebpPreset::Default | ForeignWebpPreset::Photo | ForeignWebpPreset::Picture | ForeignWebpPreset::Drawing | ForeignWebpPreset::Icon | ForeignWebpPreset::Text => {
-                        return Err(InvalidParameterError!("preset", "one of: default, photo, picture, drawing, icon, text", preset));
+                    ForeignWebpPreset::Default
+                    | ForeignWebpPreset::Photo
+                    | ForeignWebpPreset::Picture
+                    | ForeignWebpPreset::Drawing
+                    | ForeignWebpPreset::Icon
+                    | ForeignWebpPreset::Text => {
+                        return Err(InvalidParameterError!(
+                            "preset",
+                            "one of: default, photo, picture, drawing, icon, text",
+                            preset
+                        ));
                     }
                     _ => {
                         self.options.webp_preset = preset;
@@ -915,7 +979,11 @@ impl Sharp {
             }
             if let Some(effort) = options.effort {
                 if !in_range(effort as _, 0.0, 6.0) {
-                    return Err(InvalidParameterError!("effort", "integer between 0 and 6", effort));
+                    return Err(InvalidParameterError!(
+                        "effort",
+                        "integer between 0 and 6",
+                        effort
+                    ));
                 }
                 self.options.webp_effort = effort;
             }
@@ -984,31 +1052,51 @@ impl Sharp {
 
             if let Some(colors) = options.colours {
                 if !in_range(colors as _, 2.0, 256.0) {
-                    return Err(InvalidParameterError!("colours", "integer between 2 and 256", colors));
+                    return Err(InvalidParameterError!(
+                        "colours",
+                        "integer between 2 and 256",
+                        colors
+                    ));
                 }
                 self.options.gif_bitdepth = Self::bitdepth_from_colour_count(colors as _) as _;
             }
             if let Some(effort) = options.effort {
                 if !in_range(effort as _, 1.0, 10.0) {
-                    return Err(InvalidParameterError!("effort", "integer between 1 and 10", effort));
+                    return Err(InvalidParameterError!(
+                        "effort",
+                        "integer between 1 and 10",
+                        effort
+                    ));
                 }
                 self.options.gif_effort = effort;
             }
             if let Some(dither) = options.dither {
                 if !in_range(dither, 0.0, 1.0) {
-                    return Err(InvalidParameterError!("dither", "number between 0.0 and 1.0", dither));
+                    return Err(InvalidParameterError!(
+                        "dither",
+                        "number between 0.0 and 1.0",
+                        dither
+                    ));
                 }
                 self.options.gif_dither = dither;
             }
             if let Some(inter_frame_max_error) = options.inter_frame_max_error {
                 if !in_range(inter_frame_max_error, 0.0, 32.0) {
-                    return Err(InvalidParameterError!("interFrameMaxError", "number between 0.0 and 32.0", inter_frame_max_error));
+                    return Err(InvalidParameterError!(
+                        "interFrameMaxError",
+                        "number between 0.0 and 32.0",
+                        inter_frame_max_error
+                    ));
                 }
                 self.options.gif_inter_frame_max_error = inter_frame_max_error;
             }
             if let Some(inter_palette_max_error) = options.inter_palette_max_error {
                 if !in_range(inter_palette_max_error, 0.0, 256.0) {
-                    return Err(InvalidParameterError!("interPaletteMaxError", "number between 0.0 and 256.0", inter_palette_max_error));
+                    return Err(InvalidParameterError!(
+                        "interPaletteMaxError",
+                        "number between 0.0 and 256.0",
+                        inter_palette_max_error
+                    ));
                 }
                 self.options.gif_inter_palette_max_error = inter_palette_max_error;
             }
@@ -1057,7 +1145,11 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
-                    return Err(InvalidParameterError!("quality", "integer between 1 and 100", quality));
+                    return Err(InvalidParameterError!(
+                        "quality",
+                        "integer between 1 and 100",
+                        quality
+                    ));
                 }
                 self.options.jp2_quality = quality;
             }
@@ -1066,13 +1158,21 @@ impl Sharp {
             }
             if let Some(tile_width) = options.tile_width {
                 if !in_range(tile_width as _, 1.0, 32768.0) {
-                    return Err(InvalidParameterError!("tileWidth", "integer between 1 and 32768", tile_width));
+                    return Err(InvalidParameterError!(
+                        "tileWidth",
+                        "integer between 1 and 32768",
+                        tile_width
+                    ));
                 }
                 self.options.jp2_tile_width = tile_width;
             }
             if let Some(tile_height) = options.tile_height {
                 if !in_range(tile_height as _, 1.0, 32768.0) {
-                    return Err(InvalidParameterError!("tileHeight", "integer between 1 and 32768", tile_height));
+                    return Err(InvalidParameterError!(
+                        "tileHeight",
+                        "integer between 1 and 32768",
+                        tile_height
+                    ));
                 }
                 self.options.jp2_tile_height = tile_height;
             }
@@ -1095,7 +1195,11 @@ impl Sharp {
     /**
      * Set animation options if available.
      */
-    fn try_set_animation_options(mut self, loop_: Option<u32>, delay: Option<u32>) -> Result<Self, String> {
+    fn try_set_animation_options(
+        mut self,
+        loop_: Option<u32>,
+        delay: Option<u32>,
+    ) -> Result<Self, String> {
         if let Some(loop_) = loop_ {
             if !in_range(loop_ as _, 0.0, 65535.0) {
                 return Err(InvalidParameterError!("loop", "integer between 0 and 65535", loop_));
@@ -1105,7 +1209,11 @@ impl Sharp {
         if let Some(delay) = delay {
             // We allow singular values as well
             if !in_range(delay as _, 0.0, 65535.0) {
-                return Err(InvalidParameterError!("delay", "integer or an array of integers between 0 and 65535", delay));
+                return Err(InvalidParameterError!(
+                    "delay",
+                    "integer or an array of integers between 0 and 65535",
+                    delay
+                ));
             }
             self.options.delay = vec![delay as _];
         }
@@ -1134,7 +1242,11 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
-                    return Err(InvalidParameterError!("quality", "integer between 1 and 100", quality));
+                    return Err(InvalidParameterError!(
+                        "quality",
+                        "integer between 1 and 100",
+                        quality
+                    ));
                 }
 
                 self.options.tiff_quality = quality;
@@ -1150,14 +1262,22 @@ impl Sharp {
                 if tile_width > 0 {
                     self.options.tiff_tile_width = tile_width;
                 } else {
-                    return Err(InvalidParameterError!("tileWidth", "integer greater than zero", tile_width));
+                    return Err(InvalidParameterError!(
+                        "tileWidth",
+                        "integer greater than zero",
+                        tile_width
+                    ));
                 }
             }
             if let Some(tile_height) = options.tile_height {
                 if tile_height > 0 {
                     self.options.tiff_tile_height = tile_height;
                 } else {
-                    return Err(InvalidParameterError!("tileHeight", "integer greater than zero", tile_height));
+                    return Err(InvalidParameterError!(
+                        "tileHeight",
+                        "integer greater than zero",
+                        tile_height
+                    ));
                 }
             }
             // miniswhite
@@ -1271,7 +1391,11 @@ impl Sharp {
 
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
-                    return Err(InvalidParameterError!("quality", "integer between 1 and 100", quality));
+                    return Err(InvalidParameterError!(
+                        "quality",
+                        "integer between 1 and 100",
+                        quality
+                    ));
                 }
                 self.options.heif_quality = quality;
             }
@@ -1280,7 +1404,11 @@ impl Sharp {
             }
             if let Some(effort) = options.effort {
                 if !in_range(effort as _, 0.0, 9.0) {
-                    return Err(InvalidParameterError!("effort", "integer between 0 and 9", effort));
+                    return Err(InvalidParameterError!(
+                        "effort",
+                        "integer between 0 and 9",
+                        effort
+                    ));
                 }
                 self.options.heif_effort = effort;
             }
@@ -1322,7 +1450,11 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
-                    return Err(InvalidParameterError!("quality", "integer between 1 and 100", quality));
+                    return Err(InvalidParameterError!(
+                        "quality",
+                        "integer between 1 and 100",
+                        quality
+                    ));
                 }
                 let quality = quality as f64;
                 // https://github.com/libjxl/libjxl/blob/0aeea7f180bafd6893c1db8072dcb67d2aa5b03d/tools/cjxl_main.cc#L640-L644
@@ -1333,13 +1465,21 @@ impl Sharp {
                 };
             } else if let Some(distance) = options.distance {
                 if !in_range(distance as _, 0.0, 15.0) {
-                    return Err(InvalidParameterError!("distance", "number between 0.0 and 15.0", distance));
+                    return Err(InvalidParameterError!(
+                        "distance",
+                        "number between 0.0 and 15.0",
+                        distance
+                    ));
                 }
                 self.options.jxl_distance = distance;
             }
             if let Some(decoding_tier) = options.decoding_tier {
                 if !in_range(decoding_tier as _, 0.0, 4.0) {
-                    return Err(InvalidParameterError!("decodingTier", "integer between 0 and 4", decoding_tier));
+                    return Err(InvalidParameterError!(
+                        "decodingTier",
+                        "integer between 0 and 4",
+                        decoding_tier
+                    ));
                 }
                 self.options.jxl_decoding_tier = decoding_tier;
             }
@@ -1348,7 +1488,11 @@ impl Sharp {
             }
             if let Some(effort) = options.effort {
                 if !in_range(effort as _, 1.0, 9.0) {
-                    return Err(InvalidParameterError!("effort", "integer between 1 and 9", effort));
+                    return Err(InvalidParameterError!(
+                        "effort",
+                        "integer between 1 and 9",
+                        effort
+                    ));
                 }
                 self.options.jxl_effort = effort;
             }
@@ -1450,11 +1594,19 @@ impl Sharp {
             if let Some(overlap) = options.overlap {
                 if in_range(overlap as _, 0.0, 8192.0) {
                     if overlap > self.options.tile_size {
-                        return Err(InvalidParameterError!("overlap", format!("<= size ({:?})", self.options.tileSize), overlap));
+                        return Err(InvalidParameterError!(
+                            "overlap",
+                            format!("<= size ({:?})", self.options.tileSize),
+                            overlap
+                        ));
                     }
                     self.options.tile_overlap = overlap;
                 } else {
-                    return Err(InvalidParameterError!("overlap", "integer between 0 and 8192", overlap));
+                    return Err(InvalidParameterError!(
+                        "overlap",
+                        "integer between 0 and 8192",
+                        overlap
+                    ));
                 }
             }
             // Container
@@ -1470,7 +1622,11 @@ impl Sharp {
                 if angle % 90 == 0 {
                     self.options.tile_angle = angle;
                 } else {
-                    return Err(InvalidParameterError!("angle", "positive/negative multiple of 90", angle));
+                    return Err(InvalidParameterError!(
+                        "angle",
+                        "positive/negative multiple of 90",
+                        angle
+                    ));
                 }
             }
             // Background colour
@@ -1484,7 +1640,11 @@ impl Sharp {
             // Threshold to skip blank tiles
             if let Some(skip_blanks) = options.skip_blanks {
                 if !in_range(skip_blanks as _, -1.0, 65535.0) {
-                    return Err(InvalidParameterError!("skipBlanks", "integer between -1 and 255/65535", skip_blanks));
+                    return Err(InvalidParameterError!(
+                        "skipBlanks",
+                        "integer between -1 and 255/65535",
+                        skip_blanks
+                    ));
                 }
                 self.options.tile_skip_blanks = skip_blanks;
             } else if let Some(layout) = options.layout {

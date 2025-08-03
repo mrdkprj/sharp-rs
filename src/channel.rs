@@ -50,9 +50,9 @@ impl Sharp {
      * @returns {Sharp}
      * @throws {Error} Invalid alpha transparency level
      */
-    pub fn ensure_alpha(mut self, alpha: u32) -> Result<Self, String> {
-        if in_range(alpha as _, 0.0, 1.1) {
-            self.options.ensure_alpha = alpha as _;
+    pub fn ensure_alpha(mut self, alpha: f64) -> Result<Self, String> {
+        if in_range(alpha, 0.0, 1.1) {
+            self.options.ensure_alpha = alpha;
         } else {
             return Err(InvalidParameterError!("alpha", "number between 0 and 1", alpha));
         }
@@ -61,6 +61,7 @@ impl Sharp {
 
     /**
      * Extract a single channel from a multi-channel image.
+     * { red: 0, green: 1, blue: 2, alpha: 3 }
      *
      * @example
      * // green.jpg is a greyscale image containing the green channel of the input
@@ -83,7 +84,11 @@ impl Sharp {
         if in_range(channel as _, 0.0, 4.0) {
             self.options.extract_channel = channel as _;
         } else {
-            return Err(InvalidParameterError!("channel", "integer or one of: red, green, blue, alpha", channel));
+            return Err(InvalidParameterError!(
+                "channel",
+                "integer or one of: red, green, blue, alpha",
+                channel
+            ));
         }
         Ok(self)
     }
@@ -104,32 +109,51 @@ impl Sharp {
      * @returns {Sharp}
      * @throws {Error} Invalid parameters
      */
-    pub fn join_channel<P: AsRef<Path>>(mut self, images: &[P], options: Option<SharpOptions>) -> Result<Self, String> {
+    pub fn join_channel<P: AsRef<Path>>(
+        mut self,
+        images: &[P],
+        options: Option<SharpOptions>,
+    ) -> Result<Self, String> {
         if images.is_empty() {
             return Ok(self);
         }
 
         if images.len() > 1 {
             for image in images {
-                self.options.join_channel_in.push(create_input_descriptor(Input::Path(image.as_ref().to_string_lossy().to_string()), options.clone())?);
+                self.options.join_channel_in.push(create_input_descriptor(
+                    Input::Path(image.as_ref().to_string_lossy().to_string()),
+                    options.clone(),
+                )?);
             }
         } else {
-            self.options.join_channel_in.push(create_input_descriptor(Input::Path(images[0].as_ref().to_string_lossy().to_string()), options)?);
+            self.options.join_channel_in.push(create_input_descriptor(
+                Input::Path(images[0].as_ref().to_string_lossy().to_string()),
+                options,
+            )?);
         }
         Ok(self)
     }
 
-    pub fn join_channel_buffers(mut self, images: &[Vec<u8>], options: Option<SharpOptions>) -> Result<Self, String> {
+    pub fn join_channel_buffers(
+        mut self,
+        images: &[Vec<u8>],
+        options: Option<SharpOptions>,
+    ) -> Result<Self, String> {
         if images.is_empty() {
             return Ok(self);
         }
 
         if images.len() > 1 {
             for image in images {
-                self.options.join_channel_in.push(create_input_descriptor(Input::Buffer(image.to_vec()), options.clone())?);
+                self.options
+                    .join_channel_in
+                    .push(create_input_descriptor(Input::Buffer(image.to_vec()), options.clone())?);
             }
         } else {
-            self.options.join_channel_in.push(create_input_descriptor(Input::Buffer(images.first().unwrap().to_vec()), options)?);
+            self.options.join_channel_in.push(create_input_descriptor(
+                Input::Buffer(images.first().unwrap().to_vec()),
+                options,
+            )?);
         }
         Ok(self)
     }
