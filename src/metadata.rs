@@ -1,12 +1,17 @@
 use crate::{
-    common::{exif_orientation, get_density, has_density, has_profile, image_type_id, ImageType, InputDescriptor},
+    common::{
+        exif_orientation, get_density, has_density, has_profile, image_type_id, ImageType,
+        InputDescriptor,
+    },
     input::open_input,
 };
 use libvips::{
     bindings::{
-        vips_array_double_get_type, vips_array_int_get_type, vips_blob_get_type, vips_image_get_string, vips_image_map, vips_isprefix, vips_ref_string_get_type, GValue, VIPS_META_BITS_PER_SAMPLE,
-        VIPS_META_EXIF_NAME, VIPS_META_ICC_NAME, VIPS_META_IPTC_NAME, VIPS_META_N_PAGES, VIPS_META_N_SUBIFDS, VIPS_META_PAGE_HEIGHT, VIPS_META_PALETTE, VIPS_META_PHOTOSHOP_NAME,
-        VIPS_META_RESOLUTION_UNIT, VIPS_META_XMP_NAME,
+        vips_array_double_get_type, vips_array_int_get_type, vips_blob_get_type,
+        vips_image_get_string, vips_image_map, vips_isprefix, vips_ref_string_get_type, GValue,
+        VIPS_META_BITS_PER_SAMPLE, VIPS_META_EXIF_NAME, VIPS_META_ICC_NAME, VIPS_META_IPTC_NAME,
+        VIPS_META_N_PAGES, VIPS_META_N_SUBIFDS, VIPS_META_PAGE_HEIGHT, VIPS_META_PALETTE,
+        VIPS_META_PHOTOSHOP_NAME, VIPS_META_RESOLUTION_UNIT, VIPS_META_XMP_NAME,
     },
     utils::{get_g_type, G_TYPE_INT},
     Result,
@@ -104,87 +109,101 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
         baton.space = (image.get_interpretation()? as u32).to_string();
         baton.channels = image.get_bands();
         baton.depth = (image.get_format()? as u32).to_string();
+
         if has_density(&image) {
             baton.density = get_density(&image);
         }
         if image.get_typeof("jpeg-chroma-subsample") == unsafe { vips_ref_string_get_type() } {
-            baton.chroma_subsampling = image.get_string("jpeg-chroma-subsample")?;
+            baton.chroma_subsampling =
+                image.get_string("jpeg-chroma-subsample").unwrap_or_default();
         }
         if image.get_typeof("interlaced") == get_g_type(G_TYPE_INT) {
-            baton.is_progressive = image.get_int("interlaced")? == 1;
+            baton.is_progressive = image.get_int("interlaced").unwrap_or_default() == 1;
         }
         if image.get_typeof(VIPS_META_PALETTE) == get_g_type(G_TYPE_INT) {
-            baton.is_palette = image.get_int(VIPS_META_PALETTE)? == 1;
+            baton.is_palette = image.get_int(VIPS_META_PALETTE).unwrap_or_default() == 1;
         }
         if image.get_typeof(VIPS_META_BITS_PER_SAMPLE) == get_g_type(G_TYPE_INT) {
-            baton.bits_per_sample = image.get_int(VIPS_META_BITS_PER_SAMPLE)?;
+            baton.bits_per_sample = image.get_int(VIPS_META_BITS_PER_SAMPLE).unwrap_or_default();
         }
         if image.get_typeof(VIPS_META_N_PAGES) == get_g_type(G_TYPE_INT) {
-            baton.pages = image.get_int(VIPS_META_N_PAGES)?;
+            baton.pages = image.get_int(VIPS_META_N_PAGES).unwrap_or_default();
         }
         if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
-            baton.page_height = image.get_int(VIPS_META_PAGE_HEIGHT)?;
+            baton.page_height = image.get_int(VIPS_META_PAGE_HEIGHT).unwrap_or_default();
         }
         if image.get_typeof("loop") == get_g_type(G_TYPE_INT) {
-            baton.loop_ = image.get_int("loop")?;
+            baton.loop_ = image.get_int("loop").unwrap_or_default();
         }
         if image.get_typeof("delay") == unsafe { vips_array_int_get_type() } {
-            baton.delay = image.get_array_int("delay")?;
+            baton.delay = image.get_array_int("delay").unwrap_or_default();
         }
         if image.get_typeof("heif-primary") == get_g_type(G_TYPE_INT) {
-            baton.page_primary = image.get_int("heif-primary")?;
+            baton.page_primary = image.get_int("heif-primary").unwrap_or_default();
         }
         if image.get_typeof("heif-compression") == unsafe { vips_ref_string_get_type() } {
-            baton.compression = image.get_string("heif-compression")?;
+            baton.compression = image.get_string("heif-compression").unwrap_or_default();
         }
         if image.get_typeof(VIPS_META_RESOLUTION_UNIT) == unsafe { vips_ref_string_get_type() } {
-            baton.resolution_unit = image.get_string(VIPS_META_RESOLUTION_UNIT)?;
+            baton.resolution_unit = image.get_string(VIPS_META_RESOLUTION_UNIT).unwrap_or_default();
         }
         if image.get_typeof("magick-format") == unsafe { vips_ref_string_get_type() } {
-            baton.format_magick = image.get_string("magick-format")?;
+            baton.format_magick = image.get_string("magick-format").unwrap_or_default();
         }
         if image.get_typeof("openslide.level-count") == unsafe { vips_ref_string_get_type() } {
-            let levels: i32 = image.get_string("openslide.level-count")?.parse().unwrap();
+            let levels: i32 = image
+                .get_string("openslide.level-count")
+                .unwrap_or(String::from("0"))
+                .parse()
+                .unwrap();
             for l in 0..levels {
                 let prefix = format!(r#"openslide.level["{:?}"]."#, l);
-                let width: i32 = image.get_string(format!("{}width", prefix).as_bytes())?.parse().unwrap();
-                let height: i32 = image.get_string(format!("{}height", prefix).as_bytes())?.parse().unwrap();
+                let width: i32 = image
+                    .get_string(format!("{}width", prefix))
+                    .unwrap_or(String::from("0"))
+                    .parse()
+                    .unwrap();
+                let height: i32 = image
+                    .get_string(format!("{}height", prefix))
+                    .unwrap_or(String::from("0"))
+                    .parse()
+                    .unwrap();
                 baton.levels.push((width, height));
             }
         }
         if image.get_typeof(VIPS_META_N_SUBIFDS) == get_g_type(G_TYPE_INT) {
-            baton.subifds = image.get_int(VIPS_META_N_SUBIFDS)?;
+            baton.subifds = image.get_int(VIPS_META_N_SUBIFDS).unwrap_or_default();
         }
         baton.has_profile = has_profile(&image);
         if image.get_typeof("background") == unsafe { vips_array_double_get_type() } {
-            baton.background = image.get_array_double("background")?;
+            baton.background = image.get_array_double("background").unwrap_or_default();
         }
         // Derived attributes
         baton.has_alpha = image.image_hasalpha();
         baton.orientation = exif_orientation(&image);
         // EXIF
         if image.get_typeof(VIPS_META_EXIF_NAME) == unsafe { vips_blob_get_type() } {
-            let exif = image.get_blob(VIPS_META_EXIF_NAME)?;
+            let exif = image.get_blob(VIPS_META_EXIF_NAME).unwrap_or_default();
             baton.exif = exif.iter().map(|e| *e as f64).collect();
         }
         // ICC profile
         if image.get_typeof(VIPS_META_ICC_NAME) == unsafe { vips_blob_get_type() } {
-            let icc = image.get_blob(VIPS_META_ICC_NAME)?;
+            let icc = image.get_blob(VIPS_META_ICC_NAME).unwrap_or_default();
             baton.icc = icc.iter().map(|e| *e as f64).collect();
         }
         // IPTC
         if image.get_typeof(VIPS_META_IPTC_NAME) == unsafe { vips_blob_get_type() } {
-            let iptc = image.get_blob(VIPS_META_IPTC_NAME)?;
+            let iptc = image.get_blob(VIPS_META_IPTC_NAME).unwrap_or_default();
             baton.iptc = iptc.iter().map(|e| *e as f64).collect();
         }
         // XMP
         if image.get_typeof(VIPS_META_XMP_NAME) == unsafe { vips_blob_get_type() } {
-            let xmp = image.get_blob(VIPS_META_XMP_NAME)?;
+            let xmp = image.get_blob(VIPS_META_XMP_NAME).unwrap_or_default();
             baton.xmp = xmp.iter().map(|e| *e as f64).collect();
         }
         // TIFFTAG_PHOTOSHOP
         if image.get_typeof(VIPS_META_PHOTOSHOP_NAME) == unsafe { vips_blob_get_type() } {
-            let tifftag_photoshop = image.get_blob(VIPS_META_PHOTOSHOP_NAME)?;
+            let tifftag_photoshop = image.get_blob(VIPS_META_PHOTOSHOP_NAME).unwrap_or_default();
             baton.tifftag_photoshop = tifftag_photoshop.iter().map(|e| *e as f64).collect();
         }
         // PNG comments
@@ -196,8 +215,14 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
     Ok(baton)
 }
 
-unsafe extern "C" fn read_pngcomment(image: *mut libvips::bindings::_VipsImage, field: *const c_char, _value: *mut GValue, data: *mut c_void) -> *mut c_void {
-    let comments: &mut HashMap<String, String> = unsafe { &mut *(data as *mut HashMap<String, String>) };
+unsafe extern "C" fn read_pngcomment(
+    image: *mut libvips::bindings::_VipsImage,
+    field: *const c_char,
+    _value: *mut GValue,
+    data: *mut c_void,
+) -> *mut c_void {
+    let comments: &mut HashMap<String, String> =
+        unsafe { &mut *(data as *mut HashMap<String, String>) };
 
     let png_comment_start = CString::new("png-comment-").unwrap();
     let png_comment_start_len = png_comment_start.to_string_lossy().len();
