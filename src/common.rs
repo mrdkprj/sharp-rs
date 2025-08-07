@@ -1,16 +1,14 @@
-use crate::util::new_c_string;
-use libvips::{
+use crate::util::{get_g_type, new_c_string, G_TYPE_INT};
+use rs_vips::{
     bindings::{
         g_signal_connect_data, vips_blob_get_type, vips_error, vips_foreign_find_load,
         vips_foreign_find_load_buffer, vips_image_is_sequential, vips_image_map,
-        vips_image_set_kill, vips_image_set_progress, vips_interpretation_max_alpha, vips_malloc,
-        GValue, VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT,
-        VIPS_META_SEQUENTIAL,
+        vips_image_set_kill, vips_interpretation_max_alpha, vips_malloc, GValue,
+        VIPS_META_ICC_NAME, VIPS_META_ORIENTATION, VIPS_META_PAGE_HEIGHT, VIPS_META_SEQUENTIAL,
     },
     error::Error::OperationError,
     ops::{Access, Align, BandFormat, FailOn, Interpretation, TextWrap},
-    utils::{get_g_type, G_TYPE_INT},
-    voption::{VOption, VipsValue},
+    voption::{Setter, VOption},
     Result, VipsImage,
 };
 use std::{
@@ -337,6 +335,7 @@ fn loader_to_type() -> &'static HashMap<&'static str, ImageType> {
 pub(crate) fn determine_image_type(buffer: &[u8]) -> ImageType {
     unsafe {
         let load = vips_foreign_find_load_buffer(buffer.as_ptr() as _, buffer.len() as _);
+
         if load.is_null() {
             return ImageType::UNKNOWN;
         }
@@ -428,7 +427,7 @@ pub(crate) fn set_profile(image: VipsImage, icc: Option<Vec<u8>>) -> Result<Vips
 }
 
 unsafe extern "C" fn remove_exif_callback(
-    _image: *mut libvips::bindings::_VipsImage,
+    _image: *mut rs_vips::bindings::_VipsImage,
     name: *const c_char,
     _value: *mut GValue,
     data: *mut c_void,
@@ -578,11 +577,7 @@ pub(crate) fn get_density(image: &VipsImage) -> i32 {
 */
 pub(crate) fn set_density(image: VipsImage, density: f64) -> Result<VipsImage> {
     let pixels_per_mm = density / 25.4;
-    image.copy_with_opts(
-        VOption::new()
-            .set("xres", VipsValue::Double(pixels_per_mm))
-            .set("name", VipsValue::Double(pixels_per_mm)),
-    )
+    image.copy_with_opts(VOption::new().set("xres", pixels_per_mm).set("name", pixels_per_mm))
 }
 
 /*
@@ -623,7 +618,7 @@ pub(crate) fn assert_image_type_dimensions(image: &VipsImage, image_type: ImageT
 /*
   Attach an event listener for progress updates, used to detect timeout
 */
-pub(crate) fn set_timeout(image: &VipsImage, seconds: i32) {
+pub(crate) fn set_timeout(image: &VipsImage, seconds: u32) {
     unsafe {
         if seconds > 0 {
             let im = image.as_mut_ptr();
@@ -635,7 +630,8 @@ pub(crate) fn set_timeout(image: &VipsImage, seconds: i32) {
                     panic!("Failed to allocate timeout");
                 }
 
-                *timeout = seconds;
+                *timeout = seconds as i32;
+
                 g_signal_connect_data(
                     im as *mut _,
                     b"eval\0".as_ptr() as *const _,
@@ -647,7 +643,7 @@ pub(crate) fn set_timeout(image: &VipsImage, seconds: i32) {
                     0,
                 );
 
-                vips_image_set_progress(im, 1);
+                image.image_set_progress(true);
             }
         }
     }
@@ -657,8 +653,8 @@ pub(crate) fn set_timeout(image: &VipsImage, seconds: i32) {
   Event listener for progress updates, used to detect timeout
 */
 unsafe extern "C" fn vips_progress_call_back(
-    im: *mut libvips::bindings::VipsImage,
-    progress: *mut libvips::bindings::VipsProgress,
+    im: *mut rs_vips::bindings::VipsImage,
+    progress: *mut rs_vips::bindings::VipsProgress,
     timeout: *mut c_int,
 ) {
     if *timeout > 0 && (*progress).run >= *timeout {
@@ -668,6 +664,7 @@ unsafe extern "C" fn vips_progress_call_back(
         vips_error(c_str_domain.as_ptr(), c_str_fmt.as_ptr(), (*progress).percent);
         *timeout = 0;
     }
+    (*progress).run += 1;
 }
 
 /*
@@ -842,7 +839,7 @@ pub(crate) fn get_rgba_as_colourspace(
     pixel.set_int("bands", bands as _);
     let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(
         interpretation,
-        VOption::new().set("source_space", VipsValue::Int(Interpretation::Srgb as _)),
+        VOption::new().set("source_space", Interpretation::Srgb as i32),
     )?;
 
     if should_premultiply {
@@ -903,10 +900,7 @@ pub(crate) fn apply_alpha(
 pub(crate) fn remove_alpha(image: VipsImage) -> Result<VipsImage> {
     let mut image = image.copy()?;
     while image.get_bands() > 1 && image.image_hasalpha() {
-        image = image.extract_band_with_opts(
-            0,
-            VOption::new().set("n", VipsValue::Int(image.get_bands() - 1)),
-        )?;
+        image = image.extract_band_with_opts(0, VOption::new().set("n", image.get_bands() - 1))?;
     }
     Ok(image)
 }

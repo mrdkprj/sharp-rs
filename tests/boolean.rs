@@ -1,5 +1,8 @@
 mod fixtures;
-use sharp::{input::Raw, operation::BooleanOptions, OperationBoolean, Sharp};
+use sharp::{
+    operation::{BooleanOptions, Raw},
+    OperationBoolean, Sharp,
+};
 
 #[test]
 pub fn boolean() {

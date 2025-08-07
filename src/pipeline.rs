@@ -11,12 +11,12 @@ use crate::{
     input::open_input,
     operation::{
         bandbool, blur, boolean, clahe, convolve, crop_multi_page, dilate, embed_multi_page,
-        ensure_colourspace, erode, flatten, gamma, linear, modulate, negate, normalise, recomb,
-        sharpen, threshold, tint, trim, unflatten,
+        ensure_colourspace, erode, flatten, foreign_webp_preset_string, gamma, linear, modulate,
+        negate, normalise, recomb, sharpen, threshold, tint, trim, unflatten,
     },
-    util::VipsGuard,
+    util::{get_g_type, VipsGuard, G_TYPE_INT},
 };
-use libvips::{
+use rs_vips::{
     bindings::{
         VipsForeignKeep_VIPS_FOREIGN_KEEP_EXIF, VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC,
         VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT,
@@ -28,9 +28,7 @@ use libvips::{
         ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
         Intent, Interesting, Interpretation, Kernel, OperationBoolean, Precision,
     },
-    utils::{get_g_type, G_TYPE_INT},
-    v_value,
-    voption::VOption,
+    voption::{Setter, VOption},
     Result, VipsImage, VipsInterpolate,
 };
 use std::collections::HashMap;
@@ -226,7 +224,7 @@ pub(crate) struct PipelineBaton {
     pub(crate) with_icc_profile: String,
     pub(crate) with_exif: HashMap<String, String>,
     pub(crate) with_exif_merge: bool,
-    pub(crate) timeout_seconds: i32,
+    pub(crate) timeout_seconds: u32,
     pub(crate) conv_kernel: Vec<f64>,
     pub(crate) conv_kernel_width: i32,
     pub(crate) conv_kernel_height: i32,
@@ -660,11 +658,11 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         let image = VipsImage::arrayjoin_with_opts(
             images.as_mut_slice(),
             VOption::new()
-                .set("across", v_value!(baton.input.join_across))
-                .set("shim", v_value!(baton.input.join_shim))
-                .set("background", v_value!(baton.input.join_background.as_slice()))
-                .set("halign", v_value!(baton.input.join_halign as i32))
-                .set("valign", v_value!(baton.input.join_valign as i32)),
+                .set("across", baton.input.join_across)
+                .set("shim", baton.input.join_shim)
+                .set("background", baton.input.join_background.as_slice())
+                .set("halign", baton.input.join_halign as i32)
+                .set("valign", baton.input.join_valign as i32),
         )?;
         if baton.input.join_animated {
             let image = image.copy()?;
@@ -752,7 +750,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             image = alpha_image;
             image = image.rotate_with_opts(
                 baton.rotation_angle,
-                VOption::new().set("background", v_value!(background.as_slice())),
+                VOption::new().set("background", background.as_slice()),
             )?;
 
             image = VipsImage::image_copy_memory(image)?;
@@ -877,10 +875,10 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // pdfload* and svgload*
     let mut image = if jpeg_shrink_on_load > 1 {
         let option = VOption::new()
-            .set("access", v_value!(access as i32))
-            .set("shrink", v_value!(jpeg_shrink_on_load))
-            .set("unlimited", v_value!(baton.input.unlimited))
-            .set("fail_on", v_value!(baton.input.fail_on as i32));
+            .set("access", access as i32)
+            .set("shrink", jpeg_shrink_on_load)
+            .set("unlimited", baton.input.unlimited)
+            .set("fail_on", baton.input.fail_on as i32);
 
         if !baton.input.buffer.is_empty() {
             // Reload JPEG buffer
@@ -892,11 +890,11 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     } else if scale != 1.0 {
         if input_image_type == ImageType::Webp {
             let option = VOption::new()
-                .set("access", v_value!(access as i32))
-                .set("scale", v_value!(scale))
-                .set("fail_on", v_value!(baton.input.fail_on as i32))
-                .set("n", v_value!(baton.input.pages))
-                .set("page", v_value!(baton.input.page));
+                .set("access", access as i32)
+                .set("scale", scale)
+                .set("fail_on", baton.input.fail_on as i32)
+                .set("n", baton.input.pages)
+                .set("page", baton.input.page);
 
             if !baton.input.buffer.is_empty() {
                 // Reload WebP buffer
@@ -907,11 +905,11 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             }
         } else if input_image_type == ImageType::SVG {
             let option = VOption::new()
-                .set("access", v_value!(access as i32))
-                .set("scale", v_value!(scale))
-                .set("fail_on", v_value!(baton.input.fail_on as i32))
-                .set("unlimited", v_value!(baton.input.unlimited))
-                .set("dpi", v_value!(baton.input.density));
+                .set("access", access as i32)
+                .set("scale", scale)
+                .set("fail_on", baton.input.fail_on as i32)
+                .set("unlimited", baton.input.unlimited)
+                .set("dpi", baton.input.density);
 
             let image = if !baton.input.buffer.is_empty() {
                 // Reload SVG buffer
@@ -929,10 +927,10 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             image
         } else if input_image_type == ImageType::PDF {
             let option = VOption::new()
-                .set("n", v_value!(baton.input.pages))
-                .set("page", v_value!(baton.input.page))
-                .set("dpi", v_value!(baton.input.density))
-                .set("background", v_value!(baton.input.pdf_background.as_slice()));
+                .set("n", baton.input.pages)
+                .set("page", baton.input.page)
+                .set("dpi", baton.input.density)
+                .set("background", baton.input.pdf_background.as_slice());
 
             let image = if !baton.input.buffer.is_empty() {
                 // Reload PDF buffer
@@ -1015,16 +1013,16 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             .icc_transform_with_opts(
                 processing_profile,
                 VOption::new()
-                    .set("embedded", v_value!(true))
+                    .set("embedded", true)
                     .set(
                         "depth",
-                        v_value!(if is16_bit(image.get_interpretation()?) {
+                        if is16_bit(image.get_interpretation()?) {
                             16
                         } else {
                             8
-                        }),
+                        },
                     )
-                    .set("intent", v_value!(Intent::Perceptual as i32)),
+                    .set("intent", Intent::Perceptual as i32),
             )
             .unwrap_or_else(|_| {
                 println!("Invalid embedded profile");
@@ -1035,9 +1033,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     {
         image = image.icc_transform_with_opts(
             processing_profile,
-            VOption::new()
-                .set("input_profile", v_value!("cmyk"))
-                .set("intent", v_value!(Intent::Perceptual as i32)),
+            VOption::new().set("input_profile", "cmyk").set("intent", Intent::Perceptual as i32),
         )?;
     }
 
@@ -1078,9 +1074,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     if should_resize {
         image = image.resize_with_opts(
             1.0 / hshrink,
-            VOption::new()
-                .set("vscale", v_value!(1.0 / vshrink))
-                .set("kernel", v_value!(baton.kernel as i32)),
+            VOption::new().set("vscale", 1.0 / vshrink).set("kernel", baton.kernel as i32),
         )?;
     }
 
@@ -1119,9 +1113,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             join_image = ensure_colourspace(join_image, baton.colourspace_pipeline)?;
             image = VipsImage::bandjoin(&[image, join_image])?;
         }
-        image = image.copy_with_opts(
-            VOption::new().set("interpretation", v_value!(baton.colourspace as i32)),
-        )?;
+        image =
+            image.copy_with_opts(VOption::new().set("interpretation", baton.colourspace as i32))?;
         image = remove_gif_palette(image)?;
     }
 
@@ -1176,8 +1169,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                     width,
                     height,
                     VOption::new()
-                        .set("extend", v_value!(Extend::Background as i32))
-                        .set("background", v_value!(background.as_slice())),
+                        .set("extend", Extend::Background as i32)
+                        .set("background", background.as_slice()),
                 )?
             };
         } else if baton.canvas == Canvas::Crop {
@@ -1226,15 +1219,15 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                     VOption::new()
                         .set(
                             "interesting",
-                            v_value!(if baton.position == 16 {
+                            if baton.position == 16 {
                                 Interesting::Entropy
                             } else {
                                 Interesting::Attention
-                            } as i32),
+                            } as i32,
                         )
-                        .set("premultiplied", v_value!(should_premultiply_alpha))
-                        .set("attention_x", v_value!(&mut attention_x))
-                        .set("attention_y", v_value!(&mut attention_y)),
+                        .set("premultiplied", should_premultiply_alpha)
+                        .set("attention_x", &mut attention_x)
+                        .set("attention_y", &mut attention_y),
                 )?;
                 baton.has_crop_offset = true;
                 baton.crop_offset_left = image.get_xoffset();
@@ -1255,7 +1248,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             apply_alpha(image, &baton.rotation_background, should_premultiply_alpha)?;
         image = alpha_image.rotate_with_opts(
             baton.rotation_angle,
-            VOption::new().set("background", v_value!(background.as_slice())),
+            VOption::new().set("background", background.as_slice()),
         )?;
     }
 
@@ -1294,12 +1287,12 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         image = alpha_image.affine_with_opts(
             baton.affine_matrix.as_slice(),
             VOption::new()
-                .set("background", v_value!(background.as_slice()))
-                .set("idx", v_value!(baton.affine_idx))
-                .set("idy", v_value!(baton.affine_idy))
-                .set("odx", v_value!(baton.affine_odx))
-                .set("ody", v_value!(baton.affine_ody))
-                .set("interpolate", v_value!(&interp)),
+                .set("background", background.as_slice())
+                .set("idx", baton.affine_idx)
+                .set("idy", baton.affine_idy)
+                .set("odx", baton.affine_odx)
+                .set("ody", baton.affine_ody)
+                .set("interpolate", &interp),
         )?;
     }
 
@@ -1342,8 +1335,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                     baton.width,
                     baton.height,
                     VOption::new()
-                        .set("extend", v_value!(baton.extend_with as i32))
-                        .set("background", v_value!(background.as_slice())),
+                        .set("extend", baton.extend_with as i32)
+                        .set("background", background.as_slice()),
                 )?
             }
         } else {
@@ -1367,7 +1360,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                     baton.extend_top,
                     baton.width,
                     baton.height,
-                    VOption::new().set("extend", v_value!(baton.extend_with as i32)),
+                    VOption::new().set("extend", baton.extend_with as i32),
                 )?
             };
         }
@@ -1583,7 +1576,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         image = VipsImage::composite_with_opts(
             images.as_mut_slice(),
             modes.as_mut_slice(),
-            VOption::new().set("x", v_value!(xs.as_slice())).set("y", v_value!(ys.as_slice())),
+            VOption::new().set("x", xs.as_slice()).set("y", ys.as_slice()),
         )?;
         image = remove_gif_palette(image)?;
     }
@@ -1648,7 +1641,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         // Convert colourspace, pass the current known interpretation so libvips doesn't have to guess
         image = image.colourspace_with_opts(
             baton.colourspace,
-            VOption::new().set("source_space", v_value!(image.get_interpretation()? as i32)),
+            VOption::new().set("source_space", image.get_interpretation()? as i32),
         )?;
         // Transform colours from embedded profile to output profile
         if (baton.keep_metadata as u32 & VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC != 0)
@@ -1659,16 +1652,16 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             image = image.icc_transform_with_opts(
                 processing_profile,
                 VOption::new()
-                    .set("embedded", v_value!(true))
+                    .set("embedded", true)
                     .set(
                         "depth",
-                        v_value!(if is16_bit(image.get_interpretation()?) {
+                        if is16_bit(image.get_interpretation()?) {
                             16
                         } else {
                             8
-                        }),
+                        },
                     )
-                    .set("intent", v_value!(Intent::Perceptual as i32)),
+                    .set("intent", Intent::Perceptual as i32),
             )?;
         }
     }
@@ -1695,9 +1688,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             Interpretation::BW
         };
         image = image.extract_band(baton.extract_channel)?;
-        image = image.copy_with_opts(
-            VOption::new().set("interpretation", v_value!(colourspace_value as i32)),
-        )?;
+        image =
+            image.copy_with_opts(VOption::new().set("interpretation", colourspace_value as i32))?;
     }
 
     // Apply output ICC profile
@@ -1706,17 +1698,17 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             .icc_transform_with_opts(
                 &baton.with_icc_profile,
                 VOption::new()
-                    .set("input_profile", v_value!(processing_profile))
-                    .set("embedded", v_value!(true))
+                    .set("input_profile", processing_profile)
+                    .set("embedded", true)
                     .set(
                         "depth",
-                        v_value!(if is16_bit(image.get_interpretation()?) {
+                        if is16_bit(image.get_interpretation()?) {
                             16
                         } else {
                             8
-                        }),
+                        },
                     )
-                    .set("intent", v_value!(Intent::Perceptual as i32)),
+                    .set("intent", Intent::Perceptual as i32),
             )
             .unwrap_or_else(|_| {
                 println!("Invalid profile");
@@ -1783,22 +1775,22 @@ fn write(
             assert_image_type_dimensions(&image, ImageType::Jpeg)?;
             let area = image.jpegsave_buffer_with_opts(
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.jpeg_quality))
-                    .set("interlace", v_value!(baton.jpeg_progressive))
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.jpeg_quality)
+                    .set("interlace", baton.jpeg_progressive)
                     .set(
                         "subsample_mode",
-                        v_value!(if baton.jpeg_chroma_subsampling == *"4:4:4" {
+                        if baton.jpeg_chroma_subsampling == *"4:4:4" {
                             ForeignSubsample::Off
                         } else {
                             ForeignSubsample::On
-                        } as i32),
+                        } as i32,
                     )
-                    .set("trellis_quant", v_value!(baton.jpeg_trellis_quantisation))
-                    .set("quant_table", v_value!(baton.jpeg_quantisation_table))
-                    .set("overshoot_deringing", v_value!(baton.jpeg_overshoot_deringing))
-                    .set("optimize_scans", v_value!(baton.jpeg_optimise_scans))
-                    .set("optimize_coding", v_value!(baton.jpeg_optimise_coding)),
+                    .set("trellis_quant", baton.jpeg_trellis_quantisation)
+                    .set("quant_table", baton.jpeg_quantisation_table)
+                    .set("overshoot_deringing", baton.jpeg_overshoot_deringing)
+                    .set("optimize_scans", baton.jpeg_optimise_scans)
+                    .set("optimize_coding", baton.jpeg_optimise_coding),
             )?;
 
             baton.buffer_out = area;
@@ -1815,18 +1807,18 @@ fn write(
             assert_image_type_dimensions(&image, ImageType::JP2)?;
             let area = image.jp2ksave_buffer_with_opts(
                 VOption::new()
-                    .set("Q", v_value!(baton.jp2_quality))
-                    .set("lossless", v_value!(baton.jp2_lossless))
+                    .set("Q", baton.jp2_quality)
+                    .set("lossless", baton.jp2_lossless)
                     .set(
                         "subsample_mode",
-                        v_value!(if baton.jp2_chroma_subsampling == *"4:4:4" {
+                        if baton.jp2_chroma_subsampling == *"4:4:4" {
                             ForeignSubsample::Off
                         } else {
                             ForeignSubsample::On
-                        } as i32),
+                        } as i32,
                     )
-                    .set("tile_height", v_value!(baton.jp2_tile_height))
-                    .set("tile_width", v_value!(baton.jp2_tile_width)),
+                    .set("tile_height", baton.jp2_tile_height)
+                    .set("tile_width", baton.jp2_tile_width),
             )?;
 
             baton.buffer_out = area;
@@ -1839,29 +1831,29 @@ fn write(
             assert_image_type_dimensions(&image, ImageType::Png)?;
             let area = image.pngsave_buffer_with_opts(
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("interlace", v_value!(baton.png_progressive))
-                    .set("compression", v_value!(baton.png_compression_level))
+                    .set("keep", baton.keep_metadata)
+                    .set("interlace", baton.png_progressive)
+                    .set("compression", baton.png_compression_level)
                     .set(
                         "filter",
-                        v_value!(if baton.png_adaptive_filtering {
+                        if baton.png_adaptive_filtering {
                             ForeignPngFilter::All
                         } else {
                             ForeignPngFilter::None
-                        } as i32),
+                        } as i32,
                     )
-                    .set("palette", v_value!(baton.png_palette))
-                    .set("Q", v_value!(baton.png_quality))
-                    .set("effort", v_value!(baton.png_effort))
+                    .set("palette", baton.png_palette)
+                    .set("Q", baton.png_quality)
+                    .set("effort", baton.png_effort)
                     .set(
                         "bitdepth",
-                        v_value!(if is16_bit(image.get_interpretation()?) {
+                        if is16_bit(image.get_interpretation()?) {
                             16
                         } else {
                             baton.png_bitdepth
-                        }),
+                        },
                     )
-                    .set("dither", v_value!(baton.png_dither)),
+                    .set("dither", baton.png_dither),
             )?;
 
             baton.buffer_out = area;
@@ -1873,17 +1865,17 @@ fn write(
             assert_image_type_dimensions(&image, ImageType::Webp)?;
             let area = image.webpsave_buffer_with_opts(
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.webp_quality))
-                    .set("lossless", v_value!(baton.webp_lossless))
-                    .set("near_lossless", v_value!(baton.webp_near_lossless))
-                    .set("smart_subsample", v_value!(baton.webp_smart_subsample))
-                    .set("smart_deblock", v_value!(baton.webp_smart_deblock))
-                    .set("preset", v_value!(baton.webp_preset as i32))
-                    .set("effort", v_value!(baton.webp_effort))
-                    .set("min_size", v_value!(baton.webp_min_size))
-                    .set("mixed", v_value!(baton.webp_mixed))
-                    .set("alpha_q", v_value!(baton.webp_alpha_quality)),
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.webp_quality)
+                    .set("lossless", baton.webp_lossless)
+                    .set("near_lossless", baton.webp_near_lossless)
+                    .set("smart_subsample", baton.webp_smart_subsample)
+                    .set("smart_deblock", baton.webp_smart_deblock)
+                    .set("preset", baton.webp_preset as i32)
+                    .set("effort", baton.webp_effort)
+                    .set("min_size", baton.webp_min_size)
+                    .set("mixed", baton.webp_mixed)
+                    .set("alpha_q", baton.webp_alpha_quality),
             )?;
             baton.buffer_out = area;
             baton.format_out = "webp".to_string();
@@ -1894,14 +1886,14 @@ fn write(
             assert_image_type_dimensions(&image, ImageType::GIF)?;
             let area = image.gifsave_buffer_with_opts(
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("bitdepth", v_value!(baton.gif_bitdepth))
-                    .set("effort", v_value!(baton.gif_effort))
-                    .set("reuse", v_value!(baton.gif_reuse))
-                    .set("interlace", v_value!(baton.gif_progressive))
-                    .set("interframe_maxerror", v_value!(baton.gif_inter_frame_max_error))
-                    .set("interpalette_maxerror", v_value!(baton.gif_inter_palette_max_error))
-                    .set("dither", v_value!(baton.gif_dither)),
+                    .set("keep", baton.keep_metadata)
+                    .set("bitdepth", baton.gif_bitdepth)
+                    .set("effort", baton.gif_effort)
+                    .set("reuse", baton.gif_reuse)
+                    .set("interlace", baton.gif_progressive)
+                    .set("interframe_maxerror", baton.gif_inter_frame_max_error)
+                    .set("interpalette_maxerror", baton.gif_inter_palette_max_error)
+                    .set("dither", baton.gif_dither),
             )?;
             baton.buffer_out = area;
             baton.format_out = "gif".to_string();
@@ -1919,19 +1911,19 @@ fn write(
             }
             let area = image.tiffsave_buffer_with_opts(
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.tiff_quality))
-                    .set("bitdepth", v_value!(baton.tiff_bitdepth))
-                    .set("compression", v_value!(baton.tiff_compression as i32))
-                    .set("miniswhite", v_value!(baton.tiff_miniswhite))
-                    .set("predictor", v_value!(baton.tiff_predictor as i32))
-                    .set("pyramid", v_value!(baton.tiff_pyramid))
-                    .set("tile", v_value!(baton.tiff_tile))
-                    .set("tile_height", v_value!(baton.tiff_tile_height))
-                    .set("tile_width", v_value!(baton.tiff_tile_width))
-                    .set("xres", v_value!(baton.tiff_xres))
-                    .set("yres", v_value!(baton.tiff_yres))
-                    .set("resunit", v_value!(baton.tiff_resolution_unit as i32)),
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.tiff_quality)
+                    .set("bitdepth", baton.tiff_bitdepth)
+                    .set("compression", baton.tiff_compression as i32)
+                    .set("miniswhite", baton.tiff_miniswhite)
+                    .set("predictor", baton.tiff_predictor as i32)
+                    .set("pyramid", baton.tiff_pyramid)
+                    .set("tile", baton.tiff_tile)
+                    .set("tile_height", baton.tiff_tile_height)
+                    .set("tile_width", baton.tiff_tile_width)
+                    .set("xres", baton.tiff_xres)
+                    .set("yres", baton.tiff_yres)
+                    .set("resunit", baton.tiff_resolution_unit as i32),
             )?;
             baton.buffer_out = area;
             baton.format_out = "tiff".to_string();
@@ -1943,20 +1935,20 @@ fn write(
             image = remove_animation_properties(image)?;
             let area = image.heifsave_buffer_with_opts(
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.heif_quality))
-                    .set("compression", v_value!(baton.heif_compression as i32))
-                    .set("effort", v_value!(baton.heif_effort))
-                    .set("bitdepth", v_value!(baton.heif_bitdepth))
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.heif_quality)
+                    .set("compression", baton.heif_compression as i32)
+                    .set("effort", baton.heif_effort)
+                    .set("bitdepth", baton.heif_bitdepth)
                     .set(
                         "subsample_mode",
-                        v_value!(if baton.heif_chroma_subsampling == *"4:4:4" {
+                        if baton.heif_chroma_subsampling == *"4:4:4" {
                             ForeignSubsample::Off
                         } else {
                             ForeignSubsample::On
-                        } as i32),
+                        } as i32,
                     )
-                    .set("lossless", v_value!(baton.heif_lossless)),
+                    .set("lossless", baton.heif_lossless),
             )?;
             baton.buffer_out = area;
             baton.format_out = "heif".to_string();
@@ -1969,23 +1961,23 @@ fn write(
             image = stay_sequential(image, baton.tile_angle != 0)?;
             let suffix = build_dz_suffix(&baton);
             let mut options = VOption::new()
-                .set("keep", v_value!(baton.keep_metadata))
-                .set("tile_size", v_value!(baton.tile_size))
-                .set("overlap", v_value!(baton.tile_overlap))
-                .set("container", v_value!(baton.tile_container as i32))
-                .set("layout", v_value!(baton.tile_layout as i32))
-                .set("suffix", v_value!(&suffix))
-                .set("angle", v_value!(calculate_angle_rotation(baton.tile_angle) as i32))
-                .set("background", v_value!(baton.tile_background.as_slice()))
-                .set("centre", v_value!(baton.tile_centre))
-                .set("id", v_value!(&baton.tile_id))
-                .set("skip_blanks", v_value!(baton.tile_skip_blanks));
+                .set("keep", baton.keep_metadata)
+                .set("tile_size", baton.tile_size)
+                .set("overlap", baton.tile_overlap)
+                .set("container", baton.tile_container as i32)
+                .set("layout", baton.tile_layout as i32)
+                .set("suffix", &suffix)
+                .set("angle", calculate_angle_rotation(baton.tile_angle) as i32)
+                .set("background", baton.tile_background.as_slice())
+                .set("centre", baton.tile_centre)
+                .set("id", &baton.tile_id)
+                .set("skip_blanks", baton.tile_skip_blanks);
 
             if baton.tile_depth < ForeignDzDepth::Last {
-                options.add("depth", v_value!(baton.tile_depth as i32));
+                options.add("depth", baton.tile_depth as i32);
             }
             if !baton.tile_basename.is_empty() {
-                options.add("basename", v_value!(&baton.tile_basename));
+                options.add("basename", &baton.tile_basename);
             }
             let area = image.dzsave_buffer_with_opts(options)?;
             baton.buffer_out = area;
@@ -1997,11 +1989,11 @@ fn write(
             image = remove_animation_properties(image)?;
             let area = image.jxlsave_buffer_with_opts(
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("distance", v_value!(baton.jxl_distance))
-                    .set("tier", v_value!(baton.jxl_decoding_tier))
-                    .set("effort", v_value!(baton.jxl_effort))
-                    .set("lossless", v_value!(baton.jxl_lossless)),
+                    .set("keep", baton.keep_metadata)
+                    .set("distance", baton.jxl_distance)
+                    .set("tier", baton.jxl_decoding_tier)
+                    .set("effort", baton.jxl_effort)
+                    .set("lossless", baton.jxl_lossless),
             )?;
             baton.buffer_out = area;
             baton.format_out = "jxl".to_string();
@@ -2072,22 +2064,22 @@ fn write(
             image.jpegsave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.jpeg_quality))
-                    .set("interlace", v_value!(baton.jpeg_progressive))
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.jpeg_quality)
+                    .set("interlace", baton.jpeg_progressive)
                     .set(
                         "subsample_mode",
-                        v_value!(if baton.jpeg_chroma_subsampling == "4:4:4" {
+                        if baton.jpeg_chroma_subsampling == "4:4:4" {
                             ForeignSubsample::Off
                         } else {
                             ForeignSubsample::On
-                        } as i32),
+                        } as i32,
                     )
-                    .set("trellis_quant", v_value!(baton.jpeg_trellis_quantisation))
-                    .set("quant_table", v_value!(baton.jpeg_quantisation_table))
-                    .set("overshoot_deringing", v_value!(baton.jpeg_overshoot_deringing))
-                    .set("optimize_scans", v_value!(baton.jpeg_optimise_scans))
-                    .set("optimize_coding", v_value!(baton.jpeg_optimise_coding)),
+                    .set("trellis_quant", baton.jpeg_trellis_quantisation)
+                    .set("quant_table", baton.jpeg_quantisation_table)
+                    .set("overshoot_deringing", baton.jpeg_overshoot_deringing)
+                    .set("optimize_scans", baton.jpeg_optimise_scans)
+                    .set("optimize_coding", baton.jpeg_optimise_coding),
             )?;
             baton.format_out = "jpeg".to_string();
             baton.channels = std::cmp::min(baton.channels, 3);
@@ -2100,18 +2092,18 @@ fn write(
             image.jp2ksave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("Q", v_value!(baton.jp2_quality))
-                    .set("lossless", v_value!(baton.jp2_lossless))
+                    .set("Q", baton.jp2_quality)
+                    .set("lossless", baton.jp2_lossless)
                     .set(
                         "subsample_mode",
-                        v_value!(if baton.jp2_chroma_subsampling == "4:4:4" {
+                        if baton.jp2_chroma_subsampling == "4:4:4" {
                             ForeignSubsample::Off
                         } else {
                             ForeignSubsample::On
-                        } as i32),
+                        } as i32,
                     )
-                    .set("tile_height", v_value!(baton.jp2_tile_height))
-                    .set("tile_width", v_value!(baton.jp2_tile_width)),
+                    .set("tile_height", baton.jp2_tile_height)
+                    .set("tile_width", baton.jp2_tile_width),
             )?;
             baton.format_out = "jp2".to_string();
         } else if baton.format_out == "png"
@@ -2124,29 +2116,29 @@ fn write(
             image.pngsave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("interlace", v_value!(baton.png_progressive))
-                    .set("compression", v_value!(baton.png_compression_level))
+                    .set("keep", baton.keep_metadata)
+                    .set("interlace", baton.png_progressive)
+                    .set("compression", baton.png_compression_level)
                     .set(
                         "filter",
-                        v_value!(if baton.png_adaptive_filtering {
+                        if baton.png_adaptive_filtering {
                             ForeignPngFilter::All
                         } else {
                             ForeignPngFilter::None
-                        } as i32),
+                        } as i32,
                     )
-                    .set("palette", v_value!(baton.png_palette))
-                    .set("Q", v_value!(baton.png_quality))
+                    .set("palette", baton.png_palette)
+                    .set("Q", baton.png_quality)
                     .set(
                         "bitdepth",
-                        v_value!(if is16_bit(image.get_interpretation()?) {
+                        if is16_bit(image.get_interpretation()?) {
                             16
                         } else {
                             baton.png_bitdepth
-                        }),
+                        },
                     )
-                    .set("effort", v_value!(baton.png_effort))
-                    .set("dither", v_value!(baton.png_dither)),
+                    .set("effort", baton.png_effort)
+                    .set("dither", baton.png_dither),
             )?;
             baton.format_out = "png".to_string();
         } else if baton.format_out == "webp"
@@ -2158,17 +2150,17 @@ fn write(
             image.webpsave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.webp_quality))
-                    .set("lossless", v_value!(baton.webp_lossless))
-                    .set("near_lossless", v_value!(baton.webp_near_lossless))
-                    .set("smart_subsample", v_value!(baton.webp_smart_subsample))
-                    .set("smart_deblock", v_value!(baton.webp_smart_deblock))
-                    .set("preset", v_value!(baton.webp_preset as i32))
-                    .set("effort", v_value!(baton.webp_effort))
-                    .set("min_size", v_value!(baton.webp_min_size))
-                    .set("mixed", v_value!(baton.webp_mixed))
-                    .set("alpha_q", v_value!(baton.webp_alpha_quality)),
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.webp_quality)
+                    .set("lossless", baton.webp_lossless)
+                    .set("near_lossless", baton.webp_near_lossless)
+                    .set("smart_subsample", baton.webp_smart_subsample)
+                    .set("smart_deblock", baton.webp_smart_deblock)
+                    .set("preset", baton.webp_preset as i32)
+                    .set("effort", baton.webp_effort)
+                    .set("min_size", baton.webp_min_size)
+                    .set("mixed", baton.webp_mixed)
+                    .set("alpha_q", baton.webp_alpha_quality),
             )?;
             baton.format_out = "webp".to_string();
         } else if baton.format_out == "gif"
@@ -2180,12 +2172,12 @@ fn write(
             image.gifsave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("bitdepth", v_value!(baton.gif_bitdepth))
-                    .set("effort", v_value!(baton.gif_effort))
-                    .set("reuse", v_value!(baton.gif_reuse))
-                    .set("interlace", v_value!(baton.gif_progressive))
-                    .set("dither", v_value!(baton.gif_dither)),
+                    .set("keep", baton.keep_metadata)
+                    .set("bitdepth", baton.gif_bitdepth)
+                    .set("effort", baton.gif_effort)
+                    .set("reuse", baton.gif_reuse)
+                    .set("interlace", baton.gif_progressive)
+                    .set("dither", baton.gif_dither),
             )?;
             baton.format_out = "gif".to_string();
         } else if baton.format_out == "tiff"
@@ -2204,19 +2196,19 @@ fn write(
             image.tiffsave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.tiff_quality))
-                    .set("bitdepth", v_value!(baton.tiff_bitdepth))
-                    .set("compression", v_value!(baton.tiff_compression as i32))
-                    .set("miniswhite", v_value!(baton.tiff_miniswhite))
-                    .set("predictor", v_value!(baton.tiff_predictor as i32))
-                    .set("pyramid", v_value!(baton.tiff_pyramid))
-                    .set("tile", v_value!(baton.tiff_tile))
-                    .set("tile_height", v_value!(baton.tiff_tile_height))
-                    .set("tile_width", v_value!(baton.tiff_tile_width))
-                    .set("xres", v_value!(baton.tiff_xres))
-                    .set("yres", v_value!(baton.tiff_yres))
-                    .set("resunit", v_value!(baton.tiff_resolution_unit as i32)),
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.tiff_quality)
+                    .set("bitdepth", baton.tiff_bitdepth)
+                    .set("compression", baton.tiff_compression as i32)
+                    .set("miniswhite", baton.tiff_miniswhite)
+                    .set("predictor", baton.tiff_predictor as i32)
+                    .set("pyramid", baton.tiff_pyramid)
+                    .set("tile", baton.tiff_tile)
+                    .set("tile_height", baton.tiff_tile_height)
+                    .set("tile_width", baton.tiff_tile_width)
+                    .set("xres", baton.tiff_xres)
+                    .set("yres", baton.tiff_yres)
+                    .set("resunit", baton.tiff_resolution_unit as i32),
             )?;
             baton.format_out = "tiff".to_string();
         } else if baton.format_out == "heif"
@@ -2229,20 +2221,20 @@ fn write(
             image.heifsave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("Q", v_value!(baton.heif_quality))
-                    .set("compression", v_value!(baton.heif_compression as i32))
-                    .set("effort", v_value!(baton.heif_effort))
-                    .set("bitdepth", v_value!(baton.heif_bitdepth))
+                    .set("keep", baton.keep_metadata)
+                    .set("Q", baton.heif_quality)
+                    .set("compression", baton.heif_compression as i32)
+                    .set("effort", baton.heif_effort)
+                    .set("bitdepth", baton.heif_bitdepth)
                     .set(
                         "subsample_mode",
-                        v_value!(if baton.heif_chroma_subsampling == *"4:4:4" {
+                        if baton.heif_chroma_subsampling == *"4:4:4" {
                             ForeignSubsample::Off
                         } else {
                             ForeignSubsample::On
-                        } as i32),
+                        } as i32,
                     )
-                    .set("lossless", v_value!(baton.heif_lossless)),
+                    .set("lossless", baton.heif_lossless),
             )?;
             baton.format_out = "heif".to_string();
         } else if baton.format_out == "jxl"
@@ -2254,11 +2246,11 @@ fn write(
             image.jxlsave_with_opts(
                 &baton.file_out,
                 VOption::new()
-                    .set("keep", v_value!(baton.keep_metadata))
-                    .set("distance", v_value!(baton.jxl_distance))
-                    .set("tier", v_value!(baton.jxl_decoding_tier))
-                    .set("effort", v_value!(baton.jxl_effort))
-                    .set("lossless", v_value!(baton.jxl_lossless)),
+                    .set("keep", baton.keep_metadata)
+                    .set("distance", baton.jxl_distance)
+                    .set("tier", baton.jxl_decoding_tier)
+                    .set("effort", baton.jxl_effort)
+                    .set("lossless", baton.jxl_lossless),
             )?;
             baton.format_out = "jxl".to_string();
         } else if baton.format_out == "dz" || is_dz || is_dz_zip {
@@ -2272,23 +2264,23 @@ fn write(
             image = stay_sequential(image, baton.tile_angle != 0)?;
             let suffix = build_dz_suffix(&baton);
             let mut options = VOption::new()
-                .set("keep", v_value!(baton.keep_metadata))
-                .set("tile_size", v_value!(baton.tile_size))
-                .set("overlap", v_value!(baton.tile_overlap))
-                .set("container", v_value!(baton.tile_container as i32))
-                .set("layout", v_value!(baton.tile_layout as i32))
-                .set("suffix", v_value!(&suffix))
-                .set("angle", v_value!(calculate_angle_rotation(baton.tile_angle) as i32))
-                .set("background", v_value!(baton.tile_background.as_slice()))
-                .set("centre", v_value!(baton.tile_centre))
-                .set("id", v_value!(&baton.tile_id))
-                .set("skip_blanks", v_value!(baton.tile_skip_blanks));
+                .set("keep", baton.keep_metadata)
+                .set("tile_size", baton.tile_size)
+                .set("overlap", baton.tile_overlap)
+                .set("container", baton.tile_container as i32)
+                .set("layout", baton.tile_layout as i32)
+                .set("suffix", &suffix)
+                .set("angle", calculate_angle_rotation(baton.tile_angle) as i32)
+                .set("background", baton.tile_background.as_slice())
+                .set("centre", baton.tile_centre)
+                .set("id", &baton.tile_id)
+                .set("skip_blanks", baton.tile_skip_blanks);
 
             if baton.tile_depth < ForeignDzDepth::Last {
-                options.add("depth", v_value!(baton.tile_depth as i32));
+                options.add("depth", baton.tile_depth as i32);
             }
             if !baton.tile_basename.is_empty() {
-                options.add("basename", v_value!(&baton.tile_basename));
+                options.add("basename", &baton.tile_basename);
             }
             image.dzsave_with_opts(&baton.file_out, options)?;
             baton.format_out = "dz".to_string();
@@ -2299,7 +2291,7 @@ fn write(
             // Write V to file
             image.vipssave_with_opts(
                 &baton.file_out,
-                VOption::new().set("keep", v_value!(baton.keep_metadata)),
+                VOption::new().set("keep", baton.keep_metadata),
             )?;
             baton.format_out = "v".to_string();
         } else {
@@ -2444,7 +2436,7 @@ fn build_dz_suffix(baton: &PipelineBaton) -> String {
                     "false".to_string()
                 },
             ),
-            ("preset", (baton.webp_preset as u8).to_string()),
+            ("preset", foreign_webp_preset_string(baton.webp_preset)),
             (
                 "min_size",
                 if baton.webp_min_size {

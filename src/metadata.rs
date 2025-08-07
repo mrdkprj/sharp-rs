@@ -4,8 +4,9 @@ use crate::{
         InputDescriptor,
     },
     input::open_input,
+    util::{get_g_type, G_TYPE_INT},
 };
-use libvips::{
+use rs_vips::{
     bindings::{
         vips_array_double_get_type, vips_array_int_get_type, vips_blob_get_type,
         vips_image_get_string, vips_image_map, vips_isprefix, vips_ref_string_get_type, GValue,
@@ -13,7 +14,6 @@ use libvips::{
         VIPS_META_N_PAGES, VIPS_META_N_SUBIFDS, VIPS_META_PAGE_HEIGHT, VIPS_META_PALETTE,
         VIPS_META_PHOTOSHOP_NAME, VIPS_META_RESOLUTION_UNIT, VIPS_META_XMP_NAME,
     },
-    utils::{get_g_type, G_TYPE_INT},
     Result,
 };
 use serde::{Deserialize, Serialize};
@@ -216,7 +216,7 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
 }
 
 unsafe extern "C" fn read_pngcomment(
-    image: *mut libvips::bindings::_VipsImage,
+    image: *mut rs_vips::bindings::_VipsImage,
     field: *const c_char,
     _value: *mut GValue,
     data: *mut c_void,

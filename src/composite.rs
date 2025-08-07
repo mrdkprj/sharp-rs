@@ -4,7 +4,7 @@ use crate::{
     resize::Gravity,
     InvalidParameterError, Sharp,
 };
-use libvips::ops::{BlendMode, FailOn};
+use rs_vips::ops::{BlendMode, FailOn};
 
 #[derive(Debug, Clone)]
 pub enum CompositeInput {

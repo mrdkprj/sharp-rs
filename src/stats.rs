@@ -3,12 +3,11 @@ use crate::{
     input::open_input,
     Sharp,
 };
-use libvips::{
+use rs_vips::{
     bindings::vips_interpretation_max_alpha,
     operator::Index,
     ops::{Access, Interpretation},
-    v_value,
-    voption::VOption,
+    voption::{Setter, VOption},
     Result, VipsImage,
 };
 
@@ -74,7 +73,8 @@ impl Sharp {
                 min: *(stats_image.getpoint(STAT_MIN_INDEX, b)?.first().unwrap_or(&0.0)) as _,
                 max: *(stats_image.getpoint(STAT_MAX_INDEX, b)?.first().unwrap_or(&0.0)) as _,
                 sum: *(stats_image.getpoint(STAT_SUM_INDEX, b)?.first().unwrap_or(&0.0)),
-                squares_sum: *(stats_image.getpoint(STAT_SQ_SUM_INDEX, b)?.first().unwrap_or(&0.0)) as _,
+                squares_sum: *(stats_image.getpoint(STAT_SQ_SUM_INDEX, b)?.first().unwrap_or(&0.0))
+                    as _,
                 mean: *(stats_image.getpoint(STAT_MEAN_INDEX, b)?.first().unwrap_or(&0.0)),
                 stdev: *(stats_image.getpoint(STAT_STDEV_INDEX, b)?.first().unwrap_or(&0.0)) as _,
                 min_x: *(stats_image.getpoint(STAT_MINX_INDEX, b)?.first().unwrap_or(&0.0)) as _,
@@ -88,7 +88,9 @@ impl Sharp {
         // Image is not opaque when alpha layer is present and contains a non-mamixa value
         if image.image_hasalpha() {
             let min_alpha = *(stats_image.getpoint(STAT_MIN_INDEX, bands)?.first().unwrap_or(&0.0));
-            if min_alpha != unsafe { vips_interpretation_max_alpha(image.get_interpretation()? as _) } {
+            if min_alpha
+                != unsafe { vips_interpretation_max_alpha(image.get_interpretation()? as _) }
+            {
                 stats.is_opaque = false;
             }
         }
@@ -100,13 +102,16 @@ impl Sharp {
 
         // Estimate sharpness via standard deviation of greyscale laplacian
         if image.get_width() > 1 || image.get_height() > 1 {
-            let laplacian = VipsImage::new_matrixv(3, 3, &[0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0])?;
+            let laplacian =
+                VipsImage::new_matrixv(3, 3, &[0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0])?;
             laplacian.set_double("scale", 9.0);
             stats.sharpness = greyscale.conv(&laplacian)?.deviate()?;
         }
 
         // Most dominant sRGB colour via 4096-bin 3D histogram
-        let hist = remove_alpha(image)?.colourspace(Interpretation::Srgb)?.hist_find_ndim_with_opts(VOption::new().set("bins", v_value!(16)))?;
+        let hist = remove_alpha(image)?
+            .colourspace(Interpretation::Srgb)?
+            .hist_find_ndim_with_opts(VOption::new().set("bins", 16))?;
         let maxpos = hist.maxpos()?;
         let dx = maxpos.0;
         let dy = maxpos.1;

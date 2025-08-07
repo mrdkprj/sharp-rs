@@ -1,6 +1,6 @@
 use crate::{common::Canvas, in_range, Colour, InvalidParameterError, Sharp};
-use libvips::ops::{Extend, Kernel};
 use num_derive::{FromPrimitive, ToPrimitive};
+use rs_vips::ops::{Extend, Kernel};
 
 #[derive(Debug, Clone)]
 pub enum Fit {
@@ -49,6 +49,7 @@ pub struct ExtendOptions {
     pub extend_with: Option<Extend>,
 }
 
+#[derive(Default, Debug, Clone)]
 pub struct Region {
     /** zero-indexed offset from left edge */
     pub left: u32,
@@ -60,6 +61,7 @@ pub struct Region {
     pub height: u32,
 }
 
+#[derive(Default, Debug, Clone)]
 pub struct TrimOptions {
     /** Background colour, parsed by the color module, defaults to that of the top-left pixel. (optional) */
     pub background: Option<Colour>,
@@ -84,6 +86,7 @@ pub enum Gravity {
 
 #[derive(Debug, Clone, FromPrimitive, ToPrimitive)]
 pub enum Position {
+    Centre = 0,
     Top = 1,
     Right = 2,
     Bottom = 3,

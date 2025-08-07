@@ -2,15 +2,14 @@ use crate::{
     common::{is16_bit, remove_alpha, stay_sequential},
     Colour,
 };
-use libvips::{
+use rs_vips::{
     error::Error::OperationError,
     operator::{Ge, Index, Lt},
     ops::{
-        BandFormat, Extend, Interpretation, OperationBoolean, OperationMorphology,
-        OperationRelational, Precision,
+        BandFormat, Extend, ForeignWebpPreset, Interpretation, OperationBoolean,
+        OperationMorphology, OperationRelational, Precision,
     },
-    v_value,
-    voption::VOption,
+    voption::{Setter, VOption},
     Result, VipsImage,
 };
 use std::slice;
@@ -153,6 +152,18 @@ pub struct ModulateOptions {
     pub lightness: Option<f64>,
 }
 
+pub(crate) fn foreign_webp_preset_string(preset: ForeignWebpPreset) -> String {
+    match preset {
+        ForeignWebpPreset::Default => "default",
+        ForeignWebpPreset::Drawing => "drawing",
+        ForeignWebpPreset::Icon => "icon",
+        ForeignWebpPreset::Last => "default",
+        ForeignWebpPreset::Photo => "photo",
+        ForeignWebpPreset::Picture => "picture",
+        ForeignWebpPreset::Text => "text",
+    }
+    .to_string()
+}
 /*
  * Tint an image using the provided RGB.
  */
@@ -160,29 +171,29 @@ pub(crate) fn tint(image: VipsImage, tint: &[f64]) -> Result<VipsImage> {
     let tint_lab = (VipsImage::black(1, 1)? + tint)
         .colourspace_with_opts(
             Interpretation::Lab,
-            VOption::new().set("source_space", v_value!(Interpretation::Srgb as i32)),
+            VOption::new().set("source_space", Interpretation::Srgb as i32),
         )?
         .getpoint(0, 0)?;
 
     // LAB identity function
-    let identity_lab = VipsImage::identity_with_opts(VOption::new().set("bands", v_value!(3)))?;
+    let identity_lab = VipsImage::identity_with_opts(VOption::new().set("bands", 3))?;
     let identity_lab = identity_lab.colourspace_with_opts(
         Interpretation::Lab,
-        VOption::new().set("source_space", v_value!(Interpretation::Srgb as i32)),
+        VOption::new().set("source_space", Interpretation::Srgb as i32),
     )?;
 
     // Scale luminance range, 0.0 to 1.0
     let l = identity_lab.at(0) / 100.0;
     // Weighting functions
     let weight_l = 1.0 - 4.0 * ((&l - 0.5) * (&l - 0.5));
-    let weight_ab = (weight_l * tint_lab.as_slice())
-        .extract_band_with_opts(1, VOption::new().set("n", v_value!(2)))?;
-    let identity_lab = identity_lab.at(0).bandjoin_with(&[weight_ab])?;
+    let weight_ab =
+        (weight_l * tint_lab.as_slice()).extract_band_with_opts(1, VOption::new().set("n", 2))?;
+    let identity_lab = identity_lab.at(0).bandjoin_with(weight_ab)?;
 
     // Convert lookup table to sRGB
     let lut = identity_lab.colourspace_with_opts(
         Interpretation::Srgb,
-        VOption::new().set("source_space", v_value!(Interpretation::Lab as i32)),
+        VOption::new().set("source_space", Interpretation::Lab as i32),
     )?;
 
     // Original colourspace
@@ -198,7 +209,7 @@ pub(crate) fn tint(image: VipsImage, tint: &[f64]) -> Result<VipsImage> {
             .colourspace(Interpretation::BW)?
             .maplut(&lut)?
             .colourspace(type_before_tint)?
-            .bandjoin_with(&[alpha])?
+            .bandjoin_with(alpha)?
     } else {
         image.colourspace(Interpretation::BW)?.maplut(&lut)?.colourspace(type_before_tint)?
     };
@@ -234,21 +245,22 @@ pub(crate) fn normalise(image: VipsImage, lower: f64, upper: f64) -> Result<Vips
 
     if (max - min).abs() > 1.0 {
         // Extract chroma
-        let chroma = lab.extract_band_with_opts(1, VOption::new().set("n", v_value!(2)))?;
+        let chroma = lab.extract_band_with_opts(1, VOption::new().set("n", 2))?;
         // Calculate multiplication factor and addition
         let f = 100.0 / (max - min);
         let a = -(min * f);
         // Scale luminance, join to chroma, convert back to original colourspace
         let normalized = luminance
             .linear(&[f], &[a])?
-            .bandjoin_with(&[chroma])?
+            .bandjoin_with(chroma)?
             .colourspace(type_before_normalize)?;
+
         // Attach original alpha channel, if any
         if image.image_hasalpha() {
             // Extract original alpha channel
             let alpha = image.at(image.get_bands() - 1);
             // Join alpha channel to normalised image
-            return normalized.bandjoin_with(&[alpha]);
+            return normalized.bandjoin_with(alpha);
         } else {
             return Ok(normalized);
         }
@@ -266,7 +278,7 @@ pub(crate) fn clahe(
     height: i32,
     max_slope: i32,
 ) -> Result<VipsImage> {
-    image.hist_local_with_opts(width, height, VOption::new().set("max_slope", v_value!(max_slope)))
+    image.hist_local_with_opts(width, height, VOption::new().set("max_slope", max_slope))
 }
 
 /*
@@ -277,10 +289,10 @@ pub(crate) fn gamma(image: VipsImage, exponent: f64) -> Result<VipsImage> {
         // Separate alpha channel
         let alpha = image.at(image.get_bands() - 1);
         remove_alpha(image)?
-            .gamma_with_opts(VOption::new().set("exponent", v_value!(exponent)))?
-            .bandjoin_with(&[alpha])
+            .gamma_with_opts(VOption::new().set("exponent", exponent))?
+            .bandjoin_with(alpha)
     } else {
-        image.gamma_with_opts(VOption::new().set("exponent", v_value!(exponent)))
+        image.gamma_with_opts(VOption::new().set("exponent", exponent))
     }
 }
 
@@ -299,7 +311,7 @@ pub(crate) fn flatten(image: VipsImage, flatten_background: &[f64]) -> Result<Vi
         flatten_background[2] * multiplier,
     ];
 
-    image.flatten_with_opts(VOption::new().set("background", v_value!(background.as_slice())))
+    image.flatten_with_opts(VOption::new().set("background", background.as_slice()))
 }
 
 /**
@@ -309,7 +321,7 @@ pub(crate) fn negate(image: VipsImage, negate_alpha: bool) -> Result<VipsImage> 
     if image.image_hasalpha() && !negate_alpha {
         // Separate alpha channel
         let alpha = image.at(image.get_bands() - 1);
-        remove_alpha(image)?.invert()?.bandjoin_with(&[alpha])
+        remove_alpha(image)?.invert()?.bandjoin_with(alpha)
     } else {
         image.invert()
     }
@@ -333,9 +345,7 @@ pub(crate) fn blur(
         // Slower, accurate Gaussian blur
         stay_sequential(image, true)?.gaussblur_with_opts(
             sigma,
-            VOption::new()
-                .set("precision", v_value!(precision as i32))
-                .set("min_ampl", v_value!(min_ampl)),
+            VOption::new().set("precision", precision as i32).set("min_ampl", min_ampl),
         )
     }
 }
@@ -400,7 +410,7 @@ pub(crate) fn modulate(
             .colourspace(Interpretation::Lch)?
             .linear(&[brightness, saturation, 1.0], &[lightness, 0.0, hue as _])?
             .colourspace(colourspace_before_modulate)?
-            .bandjoin_with(&[alpha])
+            .bandjoin_with(alpha)
     } else {
         image
             .colourspace(Interpretation::Lch)?
@@ -439,12 +449,12 @@ pub(crate) fn sharpen(
         image
             .sharpen_with_opts(
                 VOption::new()
-                    .set("sigma", v_value!(sigma))
-                    .set("m1", v_value!(m1))
-                    .set("m2", v_value!(m2))
-                    .set("x1", v_value!(x1))
-                    .set("y2", v_value!(y2))
-                    .set("y3", v_value!(y3)),
+                    .set("sigma", sigma)
+                    .set("m1", m1)
+                    .set("m2", m2)
+                    .set("x1", x1)
+                    .set("y2", y2)
+                    .set("y3", y3),
             )?
             .colourspace(colourspace_before_sharpen)
     }
@@ -469,7 +479,7 @@ pub(crate) fn threshold(
 */
 pub(crate) fn bandbool(mut image: VipsImage, boolean: OperationBoolean) -> Result<VipsImage> {
     image = image.bandbool(boolean)?;
-    image.copy_with_opts(VOption::new().set("interpretation", v_value!(Interpretation::BW as i32)))
+    image.copy_with_opts(VOption::new().set("interpretation", Interpretation::BW as i32))
 }
 
 /*
@@ -518,9 +528,9 @@ pub(crate) fn trim(
 
     let (left, top, width, height) = image.find_trim_with_opts(
         VOption::new()
-            .set("background", v_value!(background.as_slice()))
-            .set("line_art", v_value!(line_art))
-            .set("threshold", v_value!(threshold)),
+            .set("background", background.as_slice())
+            .set("line_art", line_art)
+            .set("threshold", threshold),
     )?;
 
     if image.image_hasalpha() {
@@ -528,9 +538,9 @@ pub(crate) fn trim(
         let alpha = image.at(image.get_bands() - 1);
         let (left_a, top_a, width_a, height_a) = alpha.find_trim_with_opts(
             VOption::new()
-                .set("background", v_value!(vec![background_alpha].as_slice()))
-                .set("line_art", v_value!(line_art))
-                .set("threshold", v_value!(threshold)),
+                .set("background", vec![background_alpha].as_slice())
+                .set("line_art", line_art)
+                .set("threshold", threshold),
         )?;
 
         if width_a > 0 && height_a > 0 {
@@ -572,10 +582,10 @@ pub(crate) fn linear(image: VipsImage, a: &[f64], b: &[f64]) -> Result<VipsImage
         // Separate alpha channel
         let alpha = image.at(image.get_bands() - 1);
         remove_alpha(image)?
-            .linear_with_opts(a, b, VOption::new().set("uchar", v_value!(uchar)))?
-            .bandjoin_with(&[alpha])
+            .linear_with_opts(a, b, VOption::new().set("uchar", uchar))?
+            .bandjoin_with(alpha)
     } else {
-        image.linear_with_opts(a, b, VOption::new().set("uchar", v_value!(uchar)))
+        image.linear_with_opts(a, b, VOption::new().set("uchar", uchar))
     }
 }
 
@@ -586,11 +596,11 @@ pub(crate) fn unflatten(image: VipsImage) -> Result<VipsImage> {
     if image.image_hasalpha() {
         let alpha = image.at(image.get_bands() - 1);
         let no_alpha = remove_alpha(image)?;
-        no_alpha.bandjoin_with(&[alpha & (no_alpha.colourspace(Interpretation::BW)?.lt(255.0))])
+        no_alpha.bandjoin_with(alpha & (no_alpha.colourspace(Interpretation::BW)?.lt(255.0)))
     } else {
         image
             .colourspace(Interpretation::BW)?
-            .bandjoin_with(&[image.colourspace(Interpretation::BW)?.lt(255.0)])
+            .bandjoin_with(image.colourspace(Interpretation::BW)?.lt(255.0))
     }
 }
 
@@ -604,7 +614,7 @@ pub(crate) fn ensure_colourspace(
     if colourspace != Interpretation::Last && image.get_interpretation()? != colourspace {
         return image.colourspace_with_opts(
             colourspace,
-            VOption::new().set("source_space", v_value!(image.get_interpretation()? as i32)),
+            VOption::new().set("source_space", image.get_interpretation()? as i32),
         );
     }
     Ok(image)
@@ -635,10 +645,8 @@ pub(crate) fn crop_multi_page(
         }
 
         // Reassemble the frames into a tall, thin image
-        let assembled = VipsImage::arrayjoin_with_opts(
-            pages.as_mut_slice(),
-            VOption::new().set("across", v_value!(1)),
-        )?;
+        let assembled =
+            VipsImage::arrayjoin_with_opts(pages.as_mut_slice(), VOption::new().set("across", 1))?;
 
         // Update the page height
         *page_height = height;
@@ -669,9 +677,7 @@ pub(crate) fn embed_multi_page(
             0,
             width,
             image.get_height(),
-            VOption::new()
-                .set("extend", v_value!(extend_with as i32))
-                .set("background", v_value!(background)),
+            VOption::new().set("extend", extend_with as i32).set("background", background),
         )
     } else if left == 0 && width == image.get_width() {
         // Fast path; no need to adjust the width of the multi-page image
@@ -686,9 +692,7 @@ pub(crate) fn embed_multi_page(
             top,
             image.get_width(),
             height,
-            VOption::new()
-                .set("extend", v_value!(extend_with as i32))
-                .set("background", v_value!(background)),
+            VOption::new().set("extend", extend_with as i32).set("background", background),
         )?;
 
         // Split the wide image into frames
@@ -697,10 +701,8 @@ pub(crate) fn embed_multi_page(
         }
 
         // Reassemble the frames into a tall, thin image
-        let assembled = VipsImage::arrayjoin_with_opts(
-            pages.as_slice(),
-            VOption::new().set("across", v_value!(1)),
-        )?;
+        let assembled =
+            VipsImage::arrayjoin_with_opts(pages.as_slice(), VOption::new().set("across", 1))?;
 
         // Update the page height
         *page_height = height;
@@ -721,17 +723,13 @@ pub(crate) fn embed_multi_page(
                 top,
                 width,
                 height,
-                VOption::new()
-                    .set("extend", v_value!(extend_with as i32))
-                    .set("background", v_value!(background)),
+                VOption::new().set("extend", extend_with as i32).set("background", background),
             )?;
         }
 
         // Reassemble the frames into a tall, thin image
-        let assembled = VipsImage::arrayjoin_with_opts(
-            pages.as_mut_slice(),
-            VOption::new().set("across", v_value!(1)),
-        )?;
+        let assembled =
+            VipsImage::arrayjoin_with_opts(pages.as_mut_slice(), VOption::new().set("across", 1))?;
 
         // Update the page height
         *page_height = height;

@@ -78,6 +78,7 @@ fn create() {
             channels: 4,
             background: sharp::Colour::new(255, 0, 0, 0.5),
             noise: None,
+            ..Default::default()
         }),
         ..Default::default()
     })
@@ -141,6 +142,7 @@ fn rgb() {
                 mean: Some(128.0),
                 sigma: Some(30.0),
             }),
+            ..Default::default()
         }),
         ..Default::default()
     })

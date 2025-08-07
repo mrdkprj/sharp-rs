@@ -3,7 +3,7 @@ use crate::{
     input::{create_input_descriptor, Input, SharpOptions},
     InvalidParameterError, Sharp,
 };
-use libvips::ops::OperationBoolean;
+use rs_vips::ops::OperationBoolean;
 use std::path::Path;
 
 impl Sharp {

@@ -2,7 +2,7 @@ use crate::{
     common::{determine_image_type, determine_image_type_from_str, image_type_id},
     Sharp,
 };
-use libvips::Vips;
+use rs_vips::{bindings::g_type_from_name, Vips};
 use std::ffi::CString;
 
 #[derive(Debug, Clone, Default)]
@@ -140,4 +140,11 @@ impl Drop for VipsGuard {
         Vips::error_clear();
         Vips::thread_shutdown();
     }
+}
+
+pub(crate) const G_TYPE_INT: &str = "gint";
+
+pub(crate) fn get_g_type(name: &str) -> u64 {
+    let type_name = new_c_string(name).unwrap();
+    unsafe { g_type_from_name(type_name.as_ptr()) }
 }

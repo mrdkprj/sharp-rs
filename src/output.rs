@@ -1,13 +1,14 @@
+#![allow(clippy::unnecessary_unwrap)]
 use crate::{
     in_range,
     metadata::{get_metadata, Metadata},
     pipeline, Colour, InvalidParameterError, Sharp,
 };
-use libvips::ops::{
+use num_derive::{FromPrimitive, ToPrimitive};
+use rs_vips::ops::{
     BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression,
     ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
 };
-use num_derive::{FromPrimitive, ToPrimitive};
 use std::{collections::HashMap, path::Path};
 
 pub struct WithIccProfileOptions {
@@ -722,6 +723,12 @@ impl Sharp {
      *
      */
     pub fn jpeg(mut self, options: Option<JpegOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
@@ -778,15 +785,9 @@ impl Sharp {
                 }
                 self.options.jpeg_quantisation_table = quantisation_table;
             }
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "jpeg".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "jpeg".to_string();
         }
+
+        self.update_format_out("jpeg", force);
 
         Ok(self)
     }
@@ -833,6 +834,12 @@ impl Sharp {
      *
      */
     pub fn png(mut self, options: Option<PngOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(progressive) = options.progressive {
                 self.options.png_progressive = progressive;
@@ -895,15 +902,9 @@ impl Sharp {
                     self.options.png_dither = dither;
                 }
             }
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "png".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "png".to_string();
         }
+
+        self.update_format_out("png", force);
 
         Ok(self)
     }
@@ -925,6 +926,12 @@ impl Sharp {
      *
      */
     pub fn webp(mut self, options: Option<WebpOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
@@ -994,15 +1001,9 @@ impl Sharp {
                 self.options.webp_mixed = mixed;
             }
             self = self.try_set_animation_options(options.loop_, options.delay)?;
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "webp".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "webp".to_string();
         }
+
+        self.update_format_out("webp", force);
 
         Ok(self)
     }
@@ -1042,6 +1043,12 @@ impl Sharp {
      *
      */
     pub fn gif(mut self, options: Option<GifOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(reuse) = options.reuse {
                 self.options.gif_reuse = reuse;
@@ -1101,14 +1108,9 @@ impl Sharp {
                 self.options.gif_inter_palette_max_error = inter_palette_max_error;
             }
             self = self.try_set_animation_options(options.loop_, options.delay)?;
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "gif".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "gif".to_string();
         }
+
+        self.update_format_out("gif", force);
 
         Ok(self)
     }
@@ -1139,9 +1141,12 @@ impl Sharp {
      *
      */
     pub fn jp2(mut self, options: Option<Jp2Options>) -> Result<Self, String> {
-        //   if !self.letructor.format.jp2k.output.buffer {
-        //     throw errJp2Save();
-        //   }
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
@@ -1179,15 +1184,9 @@ impl Sharp {
             if let Some(chroma_subsampling) = options.chroma_subsampling {
                 self.options.jp2_chroma_subsampling = chroma_subsampling.to_string();
             }
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "jp2".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "jp2".to_string();
         }
+
+        self.update_format_out("jp2", force);
 
         Ok(self)
     }
@@ -1239,6 +1238,12 @@ impl Sharp {
      *
      */
     pub fn tiff(mut self, options: Option<TiffOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
@@ -1315,15 +1320,9 @@ impl Sharp {
             if let Some(resolution_unit) = options.resolution_unit {
                 self.options.tiff_resolution_unit = resolution_unit;
             }
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "tiff".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "tiff".to_string();
         }
+
+        self.update_format_out("tiff", force);
 
         Ok(self)
     }
@@ -1384,6 +1383,12 @@ impl Sharp {
      *
      */
     pub fn heif(mut self, options: Option<HeifOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(compression) = options.compression {
                 self.options.heif_compression = compression;
@@ -1421,15 +1426,9 @@ impl Sharp {
                 // }
                 self.options.heif_bitdepth = bitdepth as _;
             }
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "heif".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "heif".to_string();
         }
+
+        self.update_format_out("heif", force);
 
         Ok(self)
     }
@@ -1447,6 +1446,12 @@ impl Sharp {
      *
      */
     pub fn jxl(mut self, options: Option<JxlOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(quality) = options.quality {
                 if !in_range(quality as _, 1.0, 100.0) {
@@ -1498,15 +1503,9 @@ impl Sharp {
             }
 
             self = self.try_set_animation_options(options.loop_, options.delay)?;
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "jxl".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "jxl".to_string();
         }
+
+        self.update_format_out("jxl", force);
 
         Ok(self)
     }
@@ -1533,19 +1532,18 @@ impl Sharp {
      *
      */
     pub fn raw(mut self, options: Option<RawOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             if let Some(depth) = options.depth {
                 self.options.raw_depth = depth;
             }
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "raw".to_string();
-                }
-            }
-        } else {
-            self.options.format_out = "raw".to_string();
         }
+        self.update_format_out("raw", force);
 
         Ok(self)
     }
@@ -1582,6 +1580,12 @@ impl Sharp {
      *
      */
     pub fn tile(mut self, options: Option<TileOptions>) -> Result<Self, String> {
+        let force = if options.is_none() {
+            None
+        } else {
+            options.as_ref().unwrap().force
+        };
+
         if let Some(options) = options {
             // Size of square tiles, in pixels
             if let Some(size) = options.size {
@@ -1664,12 +1668,6 @@ impl Sharp {
             if let Some(basename) = options.basename {
                 self.options.tile_basename = basename;
             }
-
-            if let Some(force) = options.force {
-                if force {
-                    self.options.format_out = "dz".to_string();
-                }
-            }
         }
         let formats = ["jpeg".to_string(), "png".to_string(), "webp".to_string()];
         // Format
@@ -1680,8 +1678,14 @@ impl Sharp {
             return Err(InvalidParameterError!("format", "one of: jpeg, png, webp", format_out));
         }
 
-        self.options.format_out = "dz".to_string();
+        self.update_format_out("dz", force);
 
         Ok(self)
+    }
+
+    fn update_format_out(&mut self, formst: &str, force: Option<bool>) {
+        if force.is_none() || force.is_some_and(|force| force) {
+            self.options.format_out = formst.to_string();
+        }
     }
 }

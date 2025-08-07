@@ -7,12 +7,14 @@ use crate::{
 };
 use common::{rgba_from_hex, InputDescriptor};
 use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
-pub use libvips::ops::{
-    BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout,
-    ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit,
-    ForeignWebpPreset, Interpretation, Kernel, OperationBoolean, Precision,
+pub use rs_vips::{
+    ops::{
+        BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout,
+        ForeignHeifCompression, ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit,
+        ForeignWebpPreset, Interpretation, Kernel, OperationBoolean, Precision,
+    },
+    Vips,
 };
-use libvips::Vips;
 use std::path::Path;
 
 pub mod channel;
@@ -200,6 +202,16 @@ impl Sharp {
         Ok(Self {
             options: all_options,
         })
+    }
+
+    /**
+     * Set a timeout for processing, in seconds. Use a value of zero to continue processing indefinitely, the default behaviour.
+     * The clock starts when libvips opens an input image for processing. Time spent waiting for a libuv thread to become available is not included.
+     * @param options Object with a `seconds` attribute between 0 and 3600 (number)
+     */
+    pub fn timeout(mut self, seconds: u32) -> Self {
+        self.options.timeout_seconds = seconds;
+        self
     }
 
     /**
