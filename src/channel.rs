@@ -1,10 +1,9 @@
 use crate::{
     in_range,
-    input::{create_input_descriptor, Input, SharpOptions},
+    input::{create_input_descriptor, SharpInput, SharpOptions},
     InvalidParameterError, Sharp,
 };
 use rs_vips::ops::OperationBoolean;
-use std::path::Path;
 
 impl Sharp {
     /**
@@ -109,52 +108,27 @@ impl Sharp {
      * @returns {Sharp}
      * @throws {Error} Invalid parameters
      */
-    pub fn join_channel<P: AsRef<Path>>(
+    pub fn join_channel(
         mut self,
-        images: &[P],
+        images: &[SharpInput],
         options: Option<SharpOptions>,
     ) -> Result<Self, String> {
-        if images.is_empty() {
+        if images.is_empty() && options.is_none() {
             return Ok(self);
         }
 
-        if images.len() > 1 {
-            for image in images {
-                self.options.join_channel_in.push(create_input_descriptor(
-                    Input::Path(image.as_ref().to_string_lossy().to_string()),
-                    options.clone(),
-                )?);
-            }
+        let images = if images.is_empty() {
+            &[SharpInput::None()]
         } else {
-            self.options.join_channel_in.push(create_input_descriptor(
-                Input::Path(images[0].as_ref().to_string_lossy().to_string()),
-                options,
-            )?);
-        }
-        Ok(self)
-    }
+            images
+        };
 
-    pub fn join_channel_buffers(
-        mut self,
-        images: &[Vec<u8>],
-        options: Option<SharpOptions>,
-    ) -> Result<Self, String> {
-        if images.is_empty() {
-            return Ok(self);
+        for image in images {
+            self.options
+                .join_channel_in
+                .push(create_input_descriptor(image.clone(), options.clone())?);
         }
 
-        if images.len() > 1 {
-            for image in images {
-                self.options
-                    .join_channel_in
-                    .push(create_input_descriptor(Input::Buffer(image.to_vec()), options.clone())?);
-            }
-        } else {
-            self.options.join_channel_in.push(create_input_descriptor(
-                Input::Buffer(images.first().unwrap().to_vec()),
-                options,
-            )?);
-        }
         Ok(self)
     }
 

@@ -1,7 +1,7 @@
 mod fixtures;
 use sharp::{
-    composite::{CompositeInput, OverlayOptions},
-    input::{Create, SharpOptions},
+    composite::OverlayOptions,
+    input::{Create, SharpInput, SharpOptions},
     resize::Gravity,
     BlendMode, Colour, Interpretation, Sharp,
 };
@@ -22,11 +22,15 @@ pub fn composite() {
             })
             .unwrap()
             .composite(&[OverlayOptions {
-                input: CompositeInput::Create(Create {
-                    width: 60,
-                    height: 40,
-                    channels: 4,
-                    background: Colour::new(0, 0, 255, 0.5),
+                input: SharpInput::None(),
+                options: Some(SharpOptions {
+                    create: Some(Create {
+                        width: 60,
+                        height: 40,
+                        channels: 4,
+                        background: Colour::new(0, 0, 255, 0.5),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 }),
                 blend: Some(*b),
@@ -47,13 +51,11 @@ pub fn composite() {
     )
     .unwrap()
     .composite(&[OverlayOptions {
-        input: CompositeInput::Path(
+        input: SharpInput::path(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests")
                 .join("img")
-                .join("input.above.composite.premultiplied.png")
-                .to_string_lossy()
-                .to_string(),
+                .join("input.above.composite.premultiplied.png"),
         ),
         blend: Some(BlendMode::ColourBurn),
         top: Some(0),
@@ -74,13 +76,11 @@ pub fn composite() {
     )
     .unwrap()
     .composite(&[OverlayOptions {
-        input: CompositeInput::Path(
+        input: SharpInput::path(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests")
                 .join("img")
-                .join("input.above.composite.premultiplied.png")
-                .to_string_lossy()
-                .to_string(),
+                .join("input.above.composite.premultiplied.png"),
         ),
         blend: Some(BlendMode::ColourBurn),
         top: Some(0),
@@ -101,13 +101,11 @@ pub fn composite() {
     )
     .unwrap()
     .composite(&[OverlayOptions {
-        input: CompositeInput::Path(
+        input: SharpInput::path(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests")
                 .join("img")
-                .join("input.above.composite.premultiplied.png")
-                .to_string_lossy()
-                .to_string(),
+                .join("input.above.composite.premultiplied.png"),
         ),
         blend: Some(BlendMode::ColourBurn),
         top: Some(0),
@@ -132,9 +130,7 @@ pub fn composite() {
     .unwrap()
     .pipeline_colourspace(Interpretation::Scrgb)
     .composite(&[OverlayOptions {
-        input: CompositeInput::Path(
-            fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-        ),
+        input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
         blend: Some(BlendMode::ColourBurn),
         ..Default::default()
     }])
@@ -157,22 +153,30 @@ pub fn composite() {
     .pipeline_colourspace(Interpretation::Scrgb)
     .composite(&[
         OverlayOptions {
-            input: CompositeInput::Create(Create {
-                width: 60,
-                height: 40,
-                channels: 4,
-                background: Colour::new(0, 0, 255, 0.5),
+            input: SharpInput::None(),
+            options: Some(SharpOptions {
+                create: Some(Create {
+                    width: 60,
+                    height: 40,
+                    channels: 4,
+                    background: Colour::new(0, 0, 255, 0.5),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
             gravity: Some(Gravity::Northeast),
             ..Default::default()
         },
         OverlayOptions {
-            input: CompositeInput::Create(Create {
-                width: 40,
-                height: 40,
-                channels: 4,
-                background: Colour::new(0, 255, 0, 0.5),
+            input: SharpInput::None(),
+            options: Some(SharpOptions {
+                create: Some(Create {
+                    width: 40,
+                    height: 40,
+                    channels: 4,
+                    background: Colour::new(0, 255, 0, 0.5),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
             gravity: Some(Gravity::Southwest),
@@ -196,7 +200,7 @@ pub fn composite() {
     })
     .unwrap()
     .composite(&[OverlayOptions {
-        input: CompositeInput::Path(fixtures::inputJpgWithExif().to_string_lossy().to_string()),
+        input: SharpInput::path(fixtures::inputJpgWithExif()),
         auto_orient: Some(true),
         ..Default::default()
     }])
@@ -208,9 +212,7 @@ pub fn composite() {
     Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .composite(&[OverlayOptions {
-            input: CompositeInput::Path(
-                fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-            ),
+            input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
             top: Some(0),
             left: Some(0),
             ..Default::default()
@@ -225,9 +227,7 @@ pub fn composite() {
         .resize(80, 80)
         .unwrap()
         .composite(&[OverlayOptions {
-            input: CompositeInput::Path(
-                fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-            ),
+            input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
             top: Some(0),
             left: Some(0),
             gravity: Some(Gravity::West),
@@ -243,9 +243,7 @@ pub fn composite() {
         .resize(400, 400)
         .unwrap()
         .composite(&[OverlayOptions {
-            input: CompositeInput::Path(
-                fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-            ),
+            input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
             top: Some(-10),
             left: Some(-10),
             gravity: Some(Gravity::West),
@@ -261,9 +259,7 @@ pub fn composite() {
         .resize(400, 400)
         .unwrap()
         .composite(&[OverlayOptions {
-            input: CompositeInput::Path(
-                fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-            ),
+            input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
             top: Some(10),
             left: Some(10),
             gravity: Some(Gravity::West),
@@ -280,9 +276,7 @@ pub fn composite() {
         .resize(400, 400)
         .unwrap()
         .composite(&[OverlayOptions {
-            input: CompositeInput::Path(
-                fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-            ),
+            input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
             top: Some(10),
             left: Some(10),
             tile: Some(true),
@@ -305,9 +299,7 @@ pub fn composite() {
     })
     .unwrap()
     .composite(&[OverlayOptions {
-        input: CompositeInput::Path(
-            fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-        ),
+        input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
         gravity: Some(Gravity::Centre),
         tile: Some(true),
         ..Default::default()
@@ -324,9 +316,7 @@ pub fn composite() {
         .resize(80, 80)
         .unwrap()
         .composite(&[OverlayOptions {
-            input: CompositeInput::Path(
-                fixtures::inputPngWithTransparency16bit().to_string_lossy().to_string(),
-            ),
+            input: SharpInput::path(fixtures::inputPngWithTransparency16bit()),
             gravity: Some(Gravity::North),
             tile: Some(true),
             ..Default::default()

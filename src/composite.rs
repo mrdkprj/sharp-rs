@@ -1,31 +1,15 @@
 use crate::{
-    input::{create_input_descriptor, Create, CreateRaw, CreateText, Input, SharpOptions},
+    input::{create_input_descriptor, SharpInput, SharpOptions},
     pipeline::Composite,
     resize::Gravity,
     InvalidParameterError, Sharp,
 };
 use rs_vips::ops::{BlendMode, FailOn};
 
-#[derive(Debug, Clone)]
-pub enum CompositeInput {
-    Path(String),
-    Buffer(Vec<u8>),
-    Create(Create),
-    Text(CreateText),
-    Raw(CreateRaw),
-    None(),
-}
-
-impl Default for CompositeInput {
-    fn default() -> Self {
-        CompositeInput::None()
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct OverlayOptions {
     /** Buffer containing image data, String containing the path to an image file, or Create object  */
-    pub input: CompositeInput,
+    pub input: SharpInput,
     /** Image options **/
     pub options: Option<SharpOptions>,
     /** how to blend this image with the image below. (optional, default `'over'`) */
@@ -60,26 +44,8 @@ impl Sharp {
 
         let mut composites = Vec::new();
         for image in images {
-            let mut options = image.options.clone().unwrap_or_default();
-            let input = match image.input.clone() {
-                CompositeInput::Raw(raw) => {
-                    options.raw = Some(raw);
-                    Input::None()
-                }
-                CompositeInput::Create(create) => {
-                    options.create = Some(create);
-                    Input::None()
-                }
-                CompositeInput::Text(text) => {
-                    options.text = Some(text);
-                    Input::None()
-                }
-                CompositeInput::Buffer(buffer) => Input::Buffer(buffer),
-                CompositeInput::Path(path) => Input::Path(path),
-                _ => Input::None(),
-            };
             let compsite = Composite {
-                input: create_input_descriptor(input, Some(options))?,
+                input: create_input_descriptor(image.input.clone(), image.options.clone())?,
                 mode: image.blend.unwrap_or(BlendMode::Over),
                 tile: image.tile.unwrap_or(false),
                 left: image.left.unwrap_or(0),

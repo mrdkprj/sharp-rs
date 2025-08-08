@@ -1,4 +1,6 @@
 use sharp::{
+    input::{Create, SharpInput, SharpOptions},
+    output::TiffOptions,
     resize::{Fit, Position, ResizeOptions},
     Colour, Sharp,
 };
@@ -123,6 +125,54 @@ fn resize() {
             position: Some(Position::RightTop),
             ..Default::default()
         })
+        .unwrap()
+        .to_buffer()
+        .unwrap();
+
+    //multiple alpha channels
+    let create = Create {
+        width: 20,
+        height: 12,
+        channels: 4,
+        background: Colour::new(0, 255, 0, 1.0),
+        ..Default::default()
+    };
+
+    let multi = Sharp::new(SharpOptions {
+        create: Some(create.clone()),
+        ..Default::default()
+    })
+    .unwrap()
+    .join_channel(
+        &[SharpInput::None()],
+        Some(SharpOptions {
+            create: Some(create.clone()),
+            ..Default::default()
+        }),
+    )
+    .unwrap()
+    .tiff(Some(TiffOptions {
+        compression: Some(sharp::ForeignTiffCompression::Deflate),
+        ..Default::default()
+    }))
+    .unwrap()
+    .to_buffer()
+    .unwrap();
+
+    Sharp::new_from_buffer(multi)
+        .unwrap()
+        .resize_with_opts(ResizeOptions {
+            width: 8,
+            height: 8,
+            fit: Some(sharp::resize::Fit::Contain),
+            background: Some(Colour::new(0, 0, 255, 1.0)),
+            ..Default::default()
+        })
+        .unwrap()
+        .tiff(Some(TiffOptions {
+            compression: Some(sharp::ForeignTiffCompression::Deflate),
+            ..Default::default()
+        }))
         .unwrap()
         .to_buffer()
         .unwrap();

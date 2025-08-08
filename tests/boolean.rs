@@ -14,7 +14,7 @@ pub fn boolean() {
             .resize(320, 240)
             .unwrap()
             .boolean(
-                sharp::input::Input::Path(
+                sharp::input::SharpInput::Path(
                     fixtures::inputJpgBooleanTest().to_string_lossy().to_string(),
                 ),
                 *b,
@@ -28,7 +28,7 @@ pub fn boolean() {
             .unwrap()
             .resize(320, 240)
             .unwrap()
-            .boolean(sharp::input::Input::Buffer(buffer.clone()), *b, None)
+            .boolean(sharp::input::SharpInput::Buffer(buffer.clone()), *b, None)
             .unwrap()
             .to_buffer()
             .unwrap();
@@ -45,7 +45,7 @@ pub fn boolean() {
             .resize(320, 240)
             .unwrap()
             .boolean(
-                sharp::input::Input::Buffer(data),
+                sharp::input::SharpInput::Buffer(data),
                 *b,
                 Some(BooleanOptions {
                     raw: Raw {

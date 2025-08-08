@@ -24,7 +24,7 @@ pub fn join() {
     .to_buffer()
     .unwrap();
 
-    Sharp::new_from_buffers_with_opts(
+    let data = Sharp::new_from_buffers_with_opts(
         vec![buf.clone(), buf2],
         SharpOptions {
             join: Some(Join {
@@ -37,6 +37,9 @@ pub fn join() {
     .unwrap()
     .to_buffer()
     .unwrap();
+
+    let meat = Sharp::new_from_buffer(data).unwrap().metadata().unwrap();
+    println!("{:?}", meat);
 
     //Join two images vertically with shim and alpha channel
     let buf2 = Sharp::new(SharpOptions {

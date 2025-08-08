@@ -1,6 +1,6 @@
 mod fixtures;
 use sharp::{
-    input::{CreateRaw, SharpOptions},
+    input::{CreateRaw, SharpInput, SharpOptions},
     Interpretation, Sharp,
 };
 
@@ -11,7 +11,13 @@ pub fn join_channel() {
         .unwrap()
         .resize(320, 240)
         .unwrap()
-        .join_channel(&[fixtures::inputPngTestJoinChannel(), fixtures::inputPngStripesH()], None)
+        .join_channel(
+            &[
+                SharpInput::path(fixtures::inputPngTestJoinChannel()),
+                SharpInput::path(fixtures::inputPngStripesH()),
+            ],
+            None,
+        )
         .unwrap()
         .to_buffer()
         .unwrap();
@@ -21,10 +27,10 @@ pub fn join_channel() {
         .unwrap()
         .resize(320, 240)
         .unwrap()
-        .join_channel_buffers(
+        .join_channel(
             &[
-                std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap(),
-                std::fs::read(fixtures::inputPngStripesH()).unwrap(),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
             ],
             None,
         )
@@ -39,9 +45,9 @@ pub fn join_channel() {
         .unwrap()
         .join_channel(
             &[
-                fixtures::inputPngTestJoinChannel(),
-                fixtures::inputPngStripesH(),
-                fixtures::inputPngStripesV(),
+                SharpInput::path(fixtures::inputPngTestJoinChannel()),
+                SharpInput::path(fixtures::inputPngStripesH()),
+                SharpInput::path(fixtures::inputPngStripesV()),
             ],
             None,
         )
@@ -55,11 +61,11 @@ pub fn join_channel() {
         .unwrap()
         .resize(320, 240)
         .unwrap()
-        .join_channel_buffers(
+        .join_channel(
             &[
-                std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap(),
-                std::fs::read(fixtures::inputPngStripesH()).unwrap(),
-                std::fs::read(fixtures::inputPngStripesV()).unwrap(),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesV()).unwrap()),
             ],
             None,
         )
@@ -73,11 +79,11 @@ pub fn join_channel() {
         .unwrap()
         .resize(320, 240)
         .unwrap()
-        .join_channel_buffers(
+        .join_channel(
             &[
-                std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap(),
-                std::fs::read(fixtures::inputPngStripesH()).unwrap(),
-                std::fs::read(fixtures::inputPngStripesV()).unwrap(),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
+                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesV()).unwrap()),
             ],
             None,
         )
@@ -108,8 +114,8 @@ pub fn join_channel() {
         .unwrap()
         .resize(320, 240)
         .unwrap()
-        .join_channel_buffers(
-            &[buf1, buf2],
+        .join_channel(
+            &[SharpInput::Buffer(buf1), SharpInput::Buffer(buf2)],
             Some(SharpOptions {
                 raw: Some(CreateRaw {
                     width: 320,

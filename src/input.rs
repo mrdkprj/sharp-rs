@@ -14,15 +14,21 @@ use rs_vips::{
 };
 
 #[derive(Debug, Clone)]
-pub enum Input {
+pub enum SharpInput {
     Path(String),
     Buffer(Vec<u8>),
     None(),
 }
 
-impl Default for Input {
+impl Default for SharpInput {
     fn default() -> Self {
-        Input::None()
+        SharpInput::None()
+    }
+}
+
+impl SharpInput {
+    pub fn path<P: AsRef<std::path::Path>>(file: P) -> Self {
+        SharpInput::Path(file.as_ref().to_string_lossy().to_string())
     }
 }
 
@@ -157,7 +163,7 @@ pub struct RotateOptions {
 }
 
 pub(crate) fn create_input_descriptor(
-    input: Input,
+    input: SharpInput,
     input_options: Option<SharpOptions>,
 ) -> core::result::Result<InputDescriptor, String> {
     let mut input_descriptor = InputDescriptor {
@@ -170,17 +176,17 @@ pub(crate) fn create_input_descriptor(
     };
 
     match input {
-        Input::Path(file) => {
+        SharpInput::Path(file) => {
             input_descriptor.file = file;
         }
-        Input::Buffer(buffer) => {
+        SharpInput::Buffer(buffer) => {
             if buffer.is_empty() {
                 return Err("Input Buffer is empty".to_string());
             }
             input_descriptor.buffer = buffer;
             input_descriptor.is_buffer = true;
         }
-        Input::None() => {}
+        SharpInput::None() => {}
     };
 
     if let Some(input_options) = input_options {

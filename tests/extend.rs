@@ -1,6 +1,6 @@
 mod fixtures;
 use sharp::{
-    composite::{CompositeInput, OverlayOptions},
+    composite::OverlayOptions,
     input::{Create, SharpOptions},
     output::PngOptions,
     resize::ExtendOptions,
@@ -204,11 +204,15 @@ pub fn extend() {
     })
     .unwrap()
     .composite(&[OverlayOptions {
-        input: CompositeInput::Create(Create {
-            width: 1,
-            height: 1,
-            channels: 4,
-            background: Colour::new(191, 25, 66, 0.8),
+        input: sharp::input::SharpInput::None(),
+        options: Some(SharpOptions {
+            create: Some(Create {
+                width: 1,
+                height: 1,
+                channels: 4,
+                background: Colour::new(191, 25, 66, 0.8),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         ..Default::default()

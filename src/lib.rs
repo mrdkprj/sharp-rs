@@ -6,7 +6,7 @@ use crate::{
     pipeline::{init_options, PipelineBaton},
 };
 use common::{rgba_from_hex, InputDescriptor};
-use input::{create_input_descriptor, CreateRaw, Input, RotateOptions, SharpOptions};
+use input::{create_input_descriptor, CreateRaw, RotateOptions, SharpInput, SharpOptions};
 pub use rs_vips::{
     ops::{
         BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout,
@@ -76,7 +76,7 @@ impl Sharp {
     pub fn new(options: SharpOptions) -> Result<Self, String> {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
         let mut all_options = init_options();
-        all_options.input = create_input_descriptor(Input::None(), Some(options))?;
+        all_options.input = create_input_descriptor(SharpInput::None(), Some(options))?;
 
         Ok(Self {
             options: all_options,
@@ -100,10 +100,7 @@ impl Sharp {
     ) -> Result<Self, String> {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
         let mut all_options = init_options();
-        all_options.input = create_input_descriptor(
-            Input::Path(filename.as_ref().to_string_lossy().to_string()),
-            options,
-        )?;
+        all_options.input = create_input_descriptor(SharpInput::path(filename), options)?;
         Ok(Self {
             options: all_options,
         })
@@ -133,12 +130,7 @@ impl Sharp {
         // Join images together
         let join: Result<Vec<InputDescriptor>, String> = files
             .iter()
-            .map(|file| {
-                create_input_descriptor(
-                    Input::Path(file.as_ref().to_string_lossy().to_string()),
-                    options.clone(),
-                )
-            })
+            .map(|file| create_input_descriptor(SharpInput::path(file), options.clone()))
             .collect();
         all_options.join = join?;
 
@@ -164,7 +156,7 @@ impl Sharp {
     ) -> Result<Self, String> {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
         let mut all_options = init_options();
-        all_options.input = create_input_descriptor(Input::Buffer(buffer), options)?;
+        all_options.input = create_input_descriptor(SharpInput::Buffer(buffer), options)?;
 
         Ok(Self {
             options: all_options,
@@ -195,7 +187,9 @@ impl Sharp {
         // Join images together
         let join: Result<Vec<InputDescriptor>, String> = buffers
             .iter()
-            .map(|buffer| create_input_descriptor(Input::Buffer(buffer.to_vec()), options.clone()))
+            .map(|buffer| {
+                create_input_descriptor(SharpInput::Buffer(buffer.to_vec()), options.clone())
+            })
             .collect();
         all_options.join = join?;
 
@@ -890,7 +884,7 @@ impl Sharp {
      */
     pub fn boolean(
         mut self,
-        operand: Input,
+        operand: SharpInput,
         operator: OperationBoolean,
         options: Option<BooleanOptions>,
     ) -> Result<Self, String> {
