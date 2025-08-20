@@ -9,7 +9,11 @@ use crate::{
 use std::path::Path;
 
 impl Sharp {
-    pub fn to_icon<P: AsRef<Path>>(self, file_out: P, sizes: Option<Vec<u16>>) -> Result<Self, String> {
+    pub fn to_icon<P: AsRef<Path>>(
+        self,
+        file_out: P,
+        sizes: Option<Vec<u16>>,
+    ) -> Result<Self, String> {
         if !self.options.join.is_empty() {
             return Err("Multiple input is not supported".to_string());
         }
@@ -77,6 +81,7 @@ impl Sharp {
                         height: first.height as _,
                         channels: 4,
                         premultiplied: false,
+                        ..Default::default()
                     }),
                     ..Default::default()
                 },
@@ -149,7 +154,8 @@ fn write_icon_entry(image_data: &[u8]) -> Result<Vec<u8>, String> {
 
 fn write_icon_entry_png(image_data: &[u8]) -> Result<Vec<u8>, String> {
     let mut buffer: Vec<u8> = Vec::new();
-    if image_data[12] != 73 && image_data[13] != 72 && image_data[14] != 68 && image_data[15] != 82 {
+    if image_data[12] != 73 && image_data[13] != 72 && image_data[14] != 68 && image_data[15] != 82
+    {
         return Err("PNG's first chunk must be an IHDR".to_string());
     }
     let mut width = read_u32_be(image_data, 16);
@@ -159,7 +165,11 @@ fn write_icon_entry_png(image_data: &[u8]) -> Result<Vec<u8>, String> {
     let mut color_entries = 0u8;
 
     if color_type == 3 {
-        if image_data[29].to_string() != "P" && image_data[30].to_string() != "L" && image_data[31].to_string() != "T" && image_data[32].to_string() != "E" {
+        if image_data[29].to_string() != "P"
+            && image_data[30].to_string() != "L"
+            && image_data[31].to_string() != "T"
+            && image_data[32].to_string() != "E"
+        {
             return Err("PNG's second chunk must be a PLTE if indexed".to_string());
         }
 

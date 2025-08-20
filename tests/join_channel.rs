@@ -1,89 +1,102 @@
 mod fixtures;
 use sharp::{
-    input::{CreateRaw, SharpInput, SharpOptions},
+    input::{CreateRaw, Input, SharpOptions},
     Interpretation, Sharp,
 };
 
 #[test]
 pub fn join_channel() {
     //Grayscale to RGB, buffer
-    Sharp::new_from_file(fixtures::inputPng())
+    let (data, info) = Sharp::new_from_file(fixtures::inputPng())
         .unwrap()
         .resize(320, 240)
         .unwrap()
         .join_channel(
             &[
-                SharpInput::path(fixtures::inputPngTestJoinChannel()),
-                SharpInput::path(fixtures::inputPngStripesH()),
+                Input::path(fixtures::inputPngTestJoinChannel()),
+                Input::path(fixtures::inputPngStripesH()),
             ],
             None,
         )
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(320, info.width);
+    assert_eq!(240, info.height);
+    assert_eq!(3, info.channels);
+    assert_similar!(fixtures::expected("joinChannel-rgb.jpg"), data, None);
 
     //Grayscale to RGB, file
-    Sharp::new_from_file(fixtures::inputPng())
+    let data = Sharp::new_from_file(fixtures::inputPng())
         .unwrap()
         .resize(320, 240)
         .unwrap()
         .join_channel(
             &[
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
             ],
             None,
         )
         .unwrap()
         .to_buffer()
         .unwrap();
+    assert_similar!(fixtures::expected("joinChannel-rgb.jpg"), data, None);
 
     //Grayscale to RGBA, buffer
-    Sharp::new_from_file(fixtures::inputPng())
+    let (data, info) = Sharp::new_from_file(fixtures::inputPng())
         .unwrap()
         .resize(320, 240)
         .unwrap()
         .join_channel(
             &[
-                SharpInput::path(fixtures::inputPngTestJoinChannel()),
-                SharpInput::path(fixtures::inputPngStripesH()),
-                SharpInput::path(fixtures::inputPngStripesV()),
+                Input::buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngStripesV()).unwrap()),
             ],
             None,
         )
         .unwrap()
         .to_colourspace(Interpretation::Srgb)
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(320, info.width);
+    assert_eq!(240, info.height);
+    assert_eq!(4, info.channels);
+    assert_similar!(fixtures::expected("joinChannel-rgba.png"), data, None);
 
     //Grayscale to RGBA, file
-    Sharp::new_from_file(fixtures::inputPng())
+    let (data, info) = Sharp::new_from_file(fixtures::inputPng())
         .unwrap()
         .resize(320, 240)
         .unwrap()
         .join_channel(
             &[
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesV()).unwrap()),
+                Input::path(fixtures::inputPngTestJoinChannel()),
+                Input::path(fixtures::inputPngStripesH()),
+                Input::path(fixtures::inputPngStripesV()),
             ],
             None,
         )
         .unwrap()
         .to_colourspace(Interpretation::Srgb)
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(320, info.width);
+    assert_eq!(240, info.height);
+    assert_eq!(4, info.channels);
+    assert_similar!(fixtures::expected("joinChannel-rgba.png"), data, None);
 
     //Grayscale to CMYK, buffers
-    Sharp::new_from_file(fixtures::inputPng())
+    let data = Sharp::new_from_file(fixtures::inputPng())
         .unwrap()
         .resize(320, 240)
         .unwrap()
         .join_channel(
             &[
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
-                SharpInput::Buffer(std::fs::read(fixtures::inputPngStripesV()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngStripesV()).unwrap()),
             ],
             None,
         )
@@ -93,6 +106,7 @@ pub fn join_channel() {
         .unwrap()
         .to_buffer()
         .unwrap();
+    assert_similar!(fixtures::expected("joinChannel-cmyk.jpg"), data, None);
 
     //join raw buffers to RGB
     let buf1 = Sharp::new_from_file(fixtures::inputPngTestJoinChannel())
@@ -110,12 +124,12 @@ pub fn join_channel() {
         .to_buffer()
         .unwrap();
 
-    Sharp::new_from_file(fixtures::inputPng())
+    let (data, info) = Sharp::new_from_file(fixtures::inputPng())
         .unwrap()
         .resize(320, 240)
         .unwrap()
         .join_channel(
-            &[SharpInput::Buffer(buf1), SharpInput::Buffer(buf2)],
+            &[Input::buffer(buf1), Input::buffer(buf2)],
             Some(SharpOptions {
                 raw: Some(CreateRaw {
                     width: 320,
@@ -127,6 +141,36 @@ pub fn join_channel() {
             }),
         )
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(320, info.width);
+    assert_eq!(240, info.height);
+    assert_eq!(3, info.channels);
+    assert_similar!(fixtures::expected("joinChannel-rgb.jpg"), data, None);
+
+    //Grayscale to RGBA, files, two arrays
+    let (data, info) = Sharp::new_from_file(fixtures::inputPng())
+        .unwrap()
+        .resize(320, 240)
+        .unwrap()
+        .join_channel(
+            &[Input::buffer(std::fs::read(fixtures::inputPngTestJoinChannel()).unwrap())],
+            None,
+        )
+        .unwrap()
+        .join_channel(
+            &[
+                Input::buffer(std::fs::read(fixtures::inputPngStripesH()).unwrap()),
+                Input::buffer(std::fs::read(fixtures::inputPngStripesV()).unwrap()),
+            ],
+            None,
+        )
+        .unwrap()
+        .to_colourspace(Interpretation::Srgb)
+        .to_buffer_with_info()
+        .unwrap();
+    assert_eq!(320, info.width);
+    assert_eq!(240, info.height);
+    assert_eq!(4, info.channels);
+    assert_similar!(fixtures::expected("joinChannel-rgb.jpg"), data, None);
 }

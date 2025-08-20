@@ -34,6 +34,7 @@ pub(crate) struct InputDescriptor {
     pub(crate) raw_width: i32,
     pub(crate) raw_height: i32,
     pub(crate) raw_premultiplied: bool,
+    pub(crate) raw_page_height: i32,
     pub(crate) pages: i32,
     pub(crate) page: i32,
     pub(crate) level: i32,
@@ -45,6 +46,7 @@ pub(crate) struct InputDescriptor {
     pub(crate) create_noise_type: String,
     pub(crate) create_noise_mean: f64,
     pub(crate) create_noise_sigma: f64,
+    pub(crate) create_page_height: i32,
     pub(crate) text_value: String,
     pub(crate) text_font: String,
     pub(crate) text_fontfile: String,
@@ -88,6 +90,7 @@ impl Default for InputDescriptor {
             raw_width: 0,
             raw_height: 0,
             raw_premultiplied: false,
+            raw_page_height: 0,
             pages: 1,
             page: 0,
             level: 0,
@@ -98,6 +101,7 @@ impl Default for InputDescriptor {
             create_background: vec![0.0, 0.0, 0.0, 255.0],
             create_noise_mean: 0.0,
             create_noise_sigma: 0.0,
+            create_page_height: 0,
             text_width: 0,
             text_height: 0,
             text_align: Align::Low,
@@ -167,13 +171,13 @@ pub(crate) fn rgba_from_hex(color: u32) -> Vec<f64> {
         let r = (color >> 24) & 0xFF; /* Shift right by 24 bits, mask the last 8 bits */
         let g = (color >> 16) & 0xFF; /* Shift right by 16 bits, mask the last 8 bits */
         let b = (color >> 8) & 0xFF; /* Shift right by 8 bits, mask the last 8 bits */
-        let a = (color & 0xFF) as f32 / 255.0; /* Extract alpha and normalize to [0.0, 1.0] */
+        let a = (color & 0xFF) as f32; /* Extract alpha and normalize to [0.0, 255.0] */
         vec![r as f64, g as f64, b as f64, a as f64]
     } else {
         let r = (color >> 16) & 0xFF; /* Shift right by 16 bits, mask the last 8 bits */
         let g = (color >> 8) & 0xFF; /* Shift right by 8 bits, mask the last 8 bits */
         let b = color & 0xFF;
-        vec![r as f64, g as f64, b as f64, 1.0]
+        vec![r as f64, g as f64, b as f64, 255.0]
     }
 }
 

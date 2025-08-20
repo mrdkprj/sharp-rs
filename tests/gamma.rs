@@ -1,18 +1,19 @@
 mod fixtures;
-use sharp::Sharp;
+use sharp::{resize::ResizeOptions, Sharp};
 
 #[test]
 pub fn gamma() {
     //value of 0.0 (disabled)
-    Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
+    let data = Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
         .unwrap()
         .resize(129, 111)
         .unwrap()
         .to_buffer()
         .unwrap();
+    assert_similar!(fixtures::expected("gamma-0.0.jpg"), data, None);
 
     //value of 2.2 (default)
-    Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
+    let data = Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
         .unwrap()
         .resize(129, 111)
         .unwrap()
@@ -20,9 +21,10 @@ pub fn gamma() {
         .unwrap()
         .to_buffer()
         .unwrap();
+    assert_similar!(fixtures::expected("gamma-2.2.jpg"), data, None);
 
     //'value of 3.0
-    Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
+    let data = Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
         .unwrap()
         .resize(129, 111)
         .unwrap()
@@ -30,9 +32,10 @@ pub fn gamma() {
         .unwrap()
         .to_buffer()
         .unwrap();
+    assert_similar!(fixtures::expected("gamma-3.0.jpg"), data, None);
 
     //input value of 2.2, output value of 3.0
-    Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
+    let data = Sharp::new_from_file(fixtures::inputJpgWithGammaHoliness())
         .unwrap()
         .resize(129, 111)
         .unwrap()
@@ -40,11 +43,15 @@ pub fn gamma() {
         .unwrap()
         .to_buffer()
         .unwrap();
+    assert_similar!(fixtures::expected("gamma-in-2.2-out-3.0.jpg"), data, None);
 
     //alpha transparency
-    Sharp::new_from_file(fixtures::inputPngOverlayLayer1())
+    let data = Sharp::new_from_file(fixtures::inputPngOverlayLayer1())
         .unwrap()
-        .resize(320, 320)
+        .resize_with_opts(ResizeOptions {
+            width: Some(320),
+            ..Default::default()
+        })
         .unwrap()
         .gamma(None, None)
         .unwrap()
@@ -52,4 +59,5 @@ pub fn gamma() {
         .unwrap()
         .to_buffer()
         .unwrap();
+    assert_similar!(fixtures::expected("gamma-alpha.jpg"), data, None);
 }

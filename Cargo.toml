@@ -18,6 +18,9 @@ strum = "0.27"
 strum_macros = "0.27"
 async-std = "1.13.1"
 
+[dev-dependencies]
+nonstd = { git = "https://github.com/mrdkprj/nonstd.git", rev="0ea291238e1066bbbf4e2eb01f2539a2975b886d" }
+
 [profile.release]
 opt-level = "s"
 debug = false

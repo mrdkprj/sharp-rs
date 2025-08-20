@@ -1,15 +1,15 @@
 mod fixtures;
 use sharp::{
-    input::{Create, SharpOptions},
+    input::SharpOptions,
     resize::{Region, ResizeOptions},
-    Colour, Interpretation, Sharp,
+    Sharp,
 };
 
 #[test]
 pub fn extract() {
     //Partial image extraction
     // jpeg
-    Sharp::new_from_file(fixtures::inputJpg())
+    let (data, info) = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .extract(Region {
             left: 2,
@@ -18,11 +18,14 @@ pub fn extract() {
             height: 20,
         })
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(20, info.width);
+    assert_eq!(20, info.height);
+    assert_similar!(fixtures::expected("extract.jpg"), data, None);
 
     // png
-    Sharp::new_from_file(fixtures::inputPng())
+    let (data, info) = Sharp::new_from_file(fixtures::inputPng())
         .unwrap()
         .extract(Region {
             left: 200,
@@ -31,11 +34,14 @@ pub fn extract() {
             height: 200,
         })
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(400, info.width);
+    assert_eq!(200, info.height);
+    assert_similar!(fixtures::expected("extract.png"), data, None);
 
     // webp
-    Sharp::new_from_file(fixtures::inputWebP())
+    let (data, info) = Sharp::new_from_file(fixtures::inputWebP())
         .unwrap()
         .extract(Region {
             left: 100,
@@ -44,11 +50,14 @@ pub fn extract() {
             height: 200,
         })
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(125, info.width);
+    assert_eq!(200, info.height);
+    assert_similar!(fixtures::expected("extract.webp"), data, None);
 
-    //Before resize
-    Sharp::new_from_file_with_opts(
+    //animated webp before resize
+    let (data, info) = Sharp::new_from_file_with_opts(
         fixtures::inputWebPAnimated(),
         SharpOptions {
             pages: Some(-1),
@@ -65,11 +74,14 @@ pub fn extract() {
     .unwrap()
     .resize(320, 80)
     .unwrap()
-    .to_buffer()
+    .to_buffer_with_info()
     .unwrap();
+    assert_eq!(320, info.width);
+    assert_eq!(80 * 9, info.height);
+    assert_similar!(fixtures::expected("gravity-center-height.webp"), data, None);
 
-    //After resize
-    Sharp::new_from_file_with_opts(
+    //animated webp after resize
+    let (data, info) = Sharp::new_from_file_with_opts(
         fixtures::inputWebPAnimated(),
         SharpOptions {
             pages: Some(-1),
@@ -86,11 +98,14 @@ pub fn extract() {
         height: 80,
     })
     .unwrap()
-    .to_buffer()
+    .to_buffer_with_info()
     .unwrap();
+    assert_eq!(320, info.width);
+    assert_eq!(80 * 9, info.height);
+    assert_similar!(fixtures::expected("gravity-center-height.webp"), data, None);
 
     // tiff
-    Sharp::new_from_file(fixtures::inputTiff())
+    let (data, info) = Sharp::new_from_file(fixtures::inputTiff())
         .unwrap()
         .extract(Region {
             left: 34,
@@ -99,11 +114,14 @@ pub fn extract() {
             height: 529,
         })
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(341, info.width);
+    assert_eq!(529, info.height);
+    assert_similar!(fixtures::expected("extract.tiff"), data, None);
 
     //Before resize
-    Sharp::new_from_file(fixtures::inputJpg())
+    let (data, info) = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .extract(Region {
             left: 10,
@@ -114,37 +132,18 @@ pub fn extract() {
         .unwrap()
         .resize(100, 100)
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(100, info.width);
+    assert_eq!(100, info.height);
+    assert_similar!(fixtures::expected("extract-resize.jpg"), data, None);
 
-    //After resize
-    Sharp::new_from_file(fixtures::inputJpg())
-        .unwrap()
-        .resize(500, 500)
-        .unwrap()
-        .extract(Region {
-            left: 10,
-            top: 10,
-            width: 100,
-            height: 100,
-        })
-        .unwrap()
-        .to_buffer()
-        .unwrap();
-
-    //Before and after resize and crop
-    Sharp::new_from_file(fixtures::inputJpg())
-        .unwrap()
-        .extract(Region {
-            left: 0,
-            top: 0,
-            width: 700,
-            height: 700,
-        })
+    //After resize and crop
+    let (data, info) = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .resize_with_opts(ResizeOptions {
-            width: 500,
-            height: 500,
+            width: Some(500),
+            height: Some(500),
             position: Some(sharp::resize::Position::Top),
             ..Default::default()
         })
@@ -156,75 +155,175 @@ pub fn extract() {
             height: 100,
         })
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(100, info.width);
+    assert_eq!(100, info.height);
+    assert_similar!(fixtures::expected("resize-crop-extract.jpg"), data, None);
 
-    //Image channel extraction
-
-    //Red channel
-    Sharp::new_from_file(fixtures::inputJpg())
+    //Before and after resize and crop
+    let (data, info) = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
-        .extract_channel(0)
+        .extract(Region {
+            left: 0,
+            top: 0,
+            width: 700,
+            height: 700,
+        })
         .unwrap()
-        .resize(320, 240)
-        .unwrap()
-        .to_buffer()
-        .unwrap();
-
-    //Green channel
-    Sharp::new_from_file(fixtures::inputJpg())
-        .unwrap()
-        .extract_channel(1)
-        .unwrap()
-        .resize(320, 240)
-        .unwrap()
-        .to_buffer()
-        .unwrap();
-
-    //Blue channel
-    Sharp::new_from_file(fixtures::inputJpg())
-        .unwrap()
-        .extract_channel(2)
-        .unwrap()
-        .resize(320, 240)
-        .unwrap()
-        .to_buffer()
-        .unwrap();
-
-    //With colorspace conversion
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(255, 0, 0, 1.0),
+        .resize_with_opts(ResizeOptions {
+            width: Some(500),
+            height: Some(500),
+            position: Some(sharp::resize::Position::Top),
             ..Default::default()
-        }),
-        ..Default::default()
-    })
-    .unwrap()
-    .to_colourspace(Interpretation::Lch)
-    .extract_channel(1)
-    .unwrap()
-    .to_buffer()
-    .unwrap();
-
-    //Alpha from 16-bit PNG
-    Sharp::new_from_file(fixtures::inputPngWithTransparency16bit())
+        })
         .unwrap()
-        .resize(16, 16)
+        .extract(Region {
+            left: 10,
+            top: 10,
+            width: 100,
+            height: 100,
+        })
         .unwrap()
-        .extract_channel(3)
-        .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(100, info.width);
+    assert_eq!(100, info.height);
+    assert_similar!(fixtures::expected("extract-resize-crop-extract.jpg"), data, None);
 
-    //Alpha from 2-channel input
-    Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
+    //Extract then rotate
+    let (data, info) = Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
         .unwrap()
-        .extract_channel(3)
+        .extract(Region {
+            left: 20,
+            top: 10,
+            width: 380,
+            height: 280,
+        })
         .unwrap()
-        .to_colourspace(Interpretation::BW)
-        .to_buffer()
+        .rotate(90, None)
+        .unwrap()
+        .jpeg(None)
+        .unwrap()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(280, info.width);
+    assert_eq!(380, info.height);
+    assert_similar!(fixtures::expected("extract-rotate.jpg"), data, None);
+
+    //Rotate then extract
+    let (data, info) = Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
+        .unwrap()
+        .rotate(90, None)
+        .unwrap()
+        .extract(Region {
+            left: 20,
+            top: 10,
+            width: 280,
+            height: 380,
+        })
+        .unwrap()
+        .jpeg(None)
+        .unwrap()
+        .to_buffer_with_info()
+        .unwrap();
+    assert_eq!(280, info.width);
+    assert_eq!(380, info.height);
+    assert_similar!(fixtures::expected("rotate-extract.jpg"), data, None);
+
+    //Extract then rotate then extract
+    let (data, info) = Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
+        .unwrap()
+        .extract(Region {
+            left: 20,
+            top: 10,
+            width: 180,
+            height: 280,
+        })
+        .unwrap()
+        .rotate(90, None)
+        .unwrap()
+        .extract(Region {
+            left: 20,
+            top: 10,
+            width: 200,
+            height: 100,
+        })
+        .unwrap()
+        .jpeg(None)
+        .unwrap()
+        .to_buffer_with_info()
+        .unwrap();
+    assert_eq!(200, info.width);
+    assert_eq!(100, info.height);
+    assert_similar!(fixtures::expected("extract-rotate-extract.jpg"), data, None);
+
+    //Extract then rotate non-90 anagle
+    let (data, info) = Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
+        .unwrap()
+        .extract(Region {
+            left: 20,
+            top: 10,
+            width: 380,
+            height: 280,
+        })
+        .unwrap()
+        .rotate(45, None)
+        .unwrap()
+        .jpeg(None)
+        .unwrap()
+        .to_buffer_with_info()
+        .unwrap();
+    assert_eq!(467, info.width);
+    assert_eq!(467, info.height);
+    assert_similar!(fixtures::expected("extract-rotate-45.jpg"), data, None);
+
+    //Rotate then extract non-90 angle
+    let (data, info) = Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
+        .unwrap()
+        .rotate(45, None)
+        .unwrap()
+        .extract(Region {
+            left: 20,
+            top: 10,
+            width: 380,
+            height: 280,
+        })
+        .unwrap()
+        .jpeg(None)
+        .unwrap()
+        .to_buffer_with_info()
+        .unwrap();
+    assert_eq!(380, info.width);
+    assert_eq!(280, info.height);
+    assert_similar!(fixtures::expected("rotate-extract-45.jpg"), data, None);
+
+    //Apply exif orientation and mirroring then extract
+    [
+        fixtures::inputJpgWithLandscapeExif1(),
+        fixtures::inputJpgWithLandscapeExif2(),
+        fixtures::inputJpgWithLandscapeExif3(),
+        fixtures::inputJpgWithLandscapeExif4(),
+        fixtures::inputJpgWithLandscapeExif5(),
+        fixtures::inputJpgWithLandscapeExif6(),
+        fixtures::inputJpgWithLandscapeExif7(),
+        fixtures::inputJpgWithLandscapeExif8(),
+    ]
+    .iter()
+    .for_each(|inp| {
+        let data = Sharp::new_from_file(inp)
+            .unwrap()
+            .auto_orient()
+            .unwrap()
+            .extract(Region {
+                left: 0,
+                top: 208,
+                width: 60,
+                height: 40,
+            })
+            .unwrap()
+            .to_buffer()
+            .unwrap();
+        assert_similar!(fixtures::expected("rotate-mirror-extract.jpg"), data, None);
+    });
 }

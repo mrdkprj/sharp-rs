@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     common::{
         determine_image_type, determine_image_type_from_str, image_type_supports_page,
@@ -6,31 +8,12 @@ use crate::{
     in_range, Colour, InvalidParameterError,
 };
 use rs_vips::{
-    bindings::vips_band_format_is8bit,
+    bindings::{vips_band_format_is8bit, VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT},
     error::Error::OperationError,
     ops::{Align, BandFormat, FailOn, Interpretation, TextWrap},
     voption::{Setter, VOption},
     Result, VipsImage,
 };
-
-#[derive(Debug, Clone)]
-pub enum SharpInput {
-    Path(String),
-    Buffer(Vec<u8>),
-    None(),
-}
-
-impl Default for SharpInput {
-    fn default() -> Self {
-        SharpInput::None()
-    }
-}
-
-impl SharpInput {
-    pub fn path<P: AsRef<std::path::Path>>(file: P) -> Self {
-        SharpInput::Path(file.as_ref().to_string_lossy().to_string())
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct SharpOptions {
@@ -57,9 +40,11 @@ pub struct SharpOptions {
 pub struct CreateRaw {
     pub width: i32,
     pub height: i32,
-    pub channels: u32,
+    pub channels: i32,
     /* Specifies that the raw input has already been premultiplied, set to true to avoid sharp premultiplying the image. (optional, default false) */
     pub premultiplied: bool,
+    /** The height of each page/frame for animated images, must be an integral factor of the overall image height. */
+    pub page_height: Option<i32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -69,7 +54,7 @@ pub struct Create {
     /** i32 of pixels high. */
     pub height: i32,
     /** i32 of bands, 3 for RGB, 4 for RGBA */
-    pub channels: u32,
+    pub channels: i32,
     /** Parsed by the [color](https://www.npmjs.org/package/color) module to extract values for red, green, blue and alpha. */
     pub background: Colour,
     /** Describes a noise to be created. */
@@ -162,9 +147,112 @@ pub struct RotateOptions {
     pub background: Colour,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum SharpInput {
+    Single(MixedInput),
+    Mixed(Vec<MixedInput>),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum MixedInput {
+    Path(String),
+    Buffer(Vec<u8>),
+    Create(Create),
+    Raw(CreateRaw),
+    Text(CreateText),
+    None(),
+}
+
+impl Default for MixedInput {
+    fn default() -> Self {
+        Self::None()
+    }
+}
+impl MixedInput {
+    pub(crate) fn path<P: AsRef<Path>>(file: P) -> Self {
+        MixedInput::Path(file.as_ref().to_string_lossy().to_string())
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Input {
+    pub(crate) inner: MixedInput,
+}
+
+impl Input {
+    pub fn path<P: AsRef<Path>>(file: P) -> Self {
+        Self {
+            inner: MixedInput::Path(file.as_ref().to_string_lossy().to_string()),
+        }
+    }
+
+    pub fn buffer(buffer: Vec<u8>) -> Self {
+        Self {
+            inner: MixedInput::Buffer(buffer),
+        }
+    }
+
+    pub fn create(create: Create) -> Self {
+        Self {
+            inner: MixedInput::Create(create),
+        }
+    }
+
+    pub fn raw(raw: CreateRaw) -> Self {
+        Self {
+            inner: MixedInput::Raw(raw),
+        }
+    }
+
+    pub fn text(text: CreateText) -> Self {
+        Self {
+            inner: MixedInput::Text(text),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Inputs {
+    pub(crate) inner: Vec<MixedInput>,
+}
+
+impl Inputs {
+    pub fn new() -> Self {
+        Self {
+            inner: Vec::new(),
+        }
+    }
+
+    pub fn path<P: AsRef<Path>>(mut self, file: P) -> Self {
+        self.inner.push(MixedInput::Path(file.as_ref().to_string_lossy().to_string()));
+        self
+    }
+
+    pub fn buffer(mut self, buffer: Vec<u8>) -> Self {
+        self.inner.push(MixedInput::Buffer(buffer));
+        self
+    }
+
+    pub fn create(mut self, create: Create) -> Self {
+        self.inner.push(MixedInput::Create(create));
+        self
+    }
+
+    pub fn raw(mut self, raw: CreateRaw) -> Self {
+        self.inner.push(MixedInput::Raw(raw));
+        self
+    }
+
+    pub fn text(mut self, text: CreateText) -> Self {
+        self.inner.push(MixedInput::Text(text));
+        self
+    }
+}
+
 pub(crate) fn create_input_descriptor(
     input: SharpInput,
     input_options: Option<SharpOptions>,
+    baton: &mut crate::pipeline::PipelineBaton,
 ) -> core::result::Result<InputDescriptor, String> {
     let mut input_descriptor = InputDescriptor {
         auto_orient: false,
@@ -175,19 +263,51 @@ pub(crate) fn create_input_descriptor(
         ..Default::default()
     };
 
+    let mut input_options = input_options.clone();
     match input {
-        SharpInput::Path(file) => {
-            input_descriptor.file = file;
+        SharpInput::Mixed(mixed) => {
+            let join: core::result::Result<Vec<InputDescriptor>, String> = mixed
+                .into_iter()
+                .map(|input| {
+                    create_input_descriptor(SharpInput::Single(input), input_options.clone(), baton)
+                })
+                .collect();
+            baton.join = join?;
         }
-        SharpInput::Buffer(buffer) => {
-            if buffer.is_empty() {
-                return Err("Input Buffer is empty".to_string());
-            }
-            input_descriptor.buffer = buffer;
-            input_descriptor.is_buffer = true;
+        SharpInput::Single(input) => {
+            match input {
+                MixedInput::Path(file) => {
+                    input_descriptor.file = file;
+                }
+                MixedInput::Buffer(buffer) => {
+                    if buffer.is_empty() {
+                        return Err("Input Buffer is empty".to_string());
+                    }
+                    input_descriptor.buffer = buffer;
+                    input_descriptor.is_buffer = true;
+                }
+                MixedInput::Create(create) => {
+                    input_options = Some(SharpOptions {
+                        create: Some(create),
+                        ..Default::default()
+                    })
+                }
+                MixedInput::Raw(raw) => {
+                    input_options = Some(SharpOptions {
+                        raw: Some(raw),
+                        ..Default::default()
+                    })
+                }
+                MixedInput::Text(text) => {
+                    input_options = Some(SharpOptions {
+                        text: Some(text),
+                        ..Default::default()
+                    })
+                }
+                MixedInput::None() => {}
+            };
         }
-        SharpInput::None() => {}
-    };
+    }
 
     if let Some(input_options) = input_options {
         // failOn
@@ -229,6 +349,24 @@ pub(crate) fn create_input_descriptor(
             input_descriptor.raw_height = raw.height;
             input_descriptor.raw_channels = raw.channels as _;
             input_descriptor.raw_premultiplied = raw.premultiplied;
+            if let Some(page_height) = raw.page_height {
+                if page_height > 0 && page_height <= raw.height {
+                    if raw.height % page_height != 0 {
+                        return Err(format!(
+                            "Expected raw.height {} to be a multiple of raw.pageHeight {}",
+                            raw.height, page_height
+                        ));
+                    } else {
+                        input_descriptor.raw_page_height = page_height
+                    }
+                } else {
+                    return Err(InvalidParameterError!(
+                        "raw.page_height",
+                        "positive integer",
+                        page_height
+                    ));
+                }
+            }
 
             input_descriptor.raw_depth = BandFormat::Uchar;
         }
@@ -263,6 +401,26 @@ pub(crate) fn create_input_descriptor(
             input_descriptor.create_width = create.width;
             input_descriptor.create_height = create.height;
             input_descriptor.create_channels = create.channels as _;
+
+            if let Some(page_height) = create.page_height {
+                if page_height > 0 && page_height <= create.height {
+                    if create.height % page_height != 0 {
+                        return Err(format!(
+                            "Expected create.height {} to be a multiple of create.pageHeight {}",
+                            create.height, page_height
+                        ));
+                    } else {
+                        input_descriptor.create_page_height = page_height
+                    }
+                } else {
+                    return Err(InvalidParameterError!(
+                        "create.page_height",
+                        "positive integer",
+                        page_height
+                    ));
+                }
+            }
+
             // Noise
             if let Some(noise) = create.noise {
                 if !in_range(create.channels as _, 1.0, 4.0) {
@@ -277,9 +435,11 @@ pub(crate) fn create_input_descriptor(
                         input_descriptor.create_noise_type = "gaussian".to_string();
                     }
                 }
+                input_descriptor.create_noise_mean = 128.0;
                 if let Some(mean) = noise.mean {
                     input_descriptor.create_noise_mean = mean;
                 }
+                input_descriptor.create_noise_sigma = 30.0;
                 if let Some(sigma) = noise.sigma {
                     input_descriptor.create_noise_sigma = sigma;
                 }
@@ -293,6 +453,7 @@ pub(crate) fn create_input_descriptor(
                 }
                 input_descriptor.create_background = create.background.rgba;
             }
+
             input_descriptor.buffer.clear();
         }
         // Create a new image with text
@@ -397,7 +558,7 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
                         .set("sigma", descriptor.create_noise_sigma),
                 )?);
             }
-            let image = VipsImage::bandjoin(bands.as_mut_slice())?;
+            let image = VipsImage::bandjoin(bands.as_slice())?;
             let interpretation = if channels < 3 {
                 Interpretation::BW
             } else {
@@ -425,6 +586,14 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
 
             VipsImage::new_from_image(&image, &background)?
         };
+
+        if descriptor.create_page_height > 0 {
+            image.set_int(VIPS_META_PAGE_HEIGHT, descriptor.create_page_height);
+            image.set_int(
+                VIPS_META_N_PAGES,
+                descriptor.create_height / descriptor.create_page_height,
+            );
+        }
 
         let image = image.cast(BandFormat::Uchar)?;
 
@@ -551,25 +720,33 @@ pub(crate) fn open_input_from_buffer(
             descriptor.raw_channels,
             descriptor.raw_depth,
         )?;
-        let image = if descriptor.raw_channels < 3 {
-            image.colourspace(if is8bit {
+
+        let space = if descriptor.raw_channels < 3 {
+            if is8bit {
                 Interpretation::BW
             } else {
                 Interpretation::Grey16
-            })?
+            }
+        } else if is8bit {
+            Interpretation::Srgb
         } else {
-            image.colourspace(if is8bit {
-                Interpretation::Srgb
+            Interpretation::Rgb16
+        };
+
+        unsafe {
+            (*image.as_mut_ptr()).Type = space as i32;
+            if descriptor.raw_page_height > 0 {
+                image.set_int(VIPS_META_PAGE_HEIGHT, descriptor.raw_page_height);
+                image
+                    .set_int(VIPS_META_N_PAGES, descriptor.raw_height / descriptor.raw_page_height);
+            }
+            let image = if descriptor.raw_premultiplied {
+                image.unpremultiply()?
             } else {
-                Interpretation::Rgb16
-            })?
-        };
-        let image = if descriptor.raw_premultiplied {
-            image.unpremultiply()?
-        } else {
-            image
-        };
-        (image, ImageType::RAW)
+                image
+            };
+            (image, ImageType::RAW)
+        }
     } else {
         // Compressed data
         let image_type = determine_image_type(&descriptor.buffer);
@@ -594,7 +771,7 @@ pub(crate) fn open_input_from_buffer(
                     option.add("stylesheet", &descriptor.svg_stylesheet);
                     option.add("high_bitdepth", descriptor.svg_high_bitdepth)
                 }
-                ImageType::Tiff => option.add("tiffSubifd", descriptor.tiff_subifd),
+                ImageType::Tiff => option.add("subifd", descriptor.tiff_subifd),
                 ImageType::PDF => {
                     option.add("dpi", descriptor.density);
                     option.add("background", descriptor.pdf_background.as_slice())

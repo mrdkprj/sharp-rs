@@ -14,6 +14,7 @@ use rs_vips::{
         VIPS_META_N_PAGES, VIPS_META_N_SUBIFDS, VIPS_META_PAGE_HEIGHT, VIPS_META_PALETTE,
         VIPS_META_PHOTOSHOP_NAME, VIPS_META_RESOLUTION_UNIT, VIPS_META_XMP_NAME,
     },
+    ops::{BandFormat, Interpretation},
     Result,
 };
 use serde::{Deserialize, Serialize};
@@ -95,6 +96,51 @@ impl Default for Metadata {
     }
 }
 
+fn interpretation_to_string(interpretation: Interpretation) -> String {
+    match interpretation {
+        Interpretation::BW => "b-w",
+        Interpretation::Cmc => "cmc",
+        Interpretation::Cmyk => "cmyk",
+        Interpretation::Error => "error",
+        Interpretation::Fourier => "fourier",
+        Interpretation::Grey16 => "grey16",
+        Interpretation::Histogram => "histogram",
+        Interpretation::Hsv => "hsv",
+        Interpretation::Lab => "lab",
+        Interpretation::Labq => "labq",
+        Interpretation::Labs => "labs",
+        Interpretation::Last => "last",
+        Interpretation::Lch => "lch",
+        Interpretation::Matrix => "matrix",
+        Interpretation::Multiband => "multiband",
+        Interpretation::Rgb => "rgb",
+        Interpretation::Rgb16 => "rgb16",
+        Interpretation::Scrgb => "scrgb",
+        Interpretation::Srgb => "srgb",
+        Interpretation::Xyz => "xyz",
+        Interpretation::Yxy => "yxy",
+    }
+    .to_string()
+}
+
+fn bandformat_to_string(format: BandFormat) -> String {
+    match format {
+        BandFormat::Char => "char",
+        BandFormat::Complex => "complex",
+        BandFormat::Double => "double",
+        BandFormat::Dpcomplex => "dpcomplex",
+        BandFormat::Float => "float",
+        BandFormat::Int => "int",
+        BandFormat::Last => "last",
+        BandFormat::Notset => "notset",
+        BandFormat::Short => "short",
+        BandFormat::Uchar => "uchar",
+        BandFormat::Uint => "uint",
+        BandFormat::Ushort => "ushort",
+    }
+    .to_string()
+}
+
 pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
     let _guard = crate::util::VipsGuard;
 
@@ -106,9 +152,9 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
         // VipsImage attributes
         baton.width = image.get_width();
         baton.height = image.get_height();
-        baton.space = (image.get_interpretation()? as u32).to_string();
+        baton.space = interpretation_to_string(image.get_interpretation()?);
         baton.channels = image.get_bands();
-        baton.depth = (image.get_format()? as u32).to_string();
+        baton.depth = bandformat_to_string(image.get_format()?);
 
         if has_density(&image) {
             baton.density = get_density(&image);
@@ -181,6 +227,12 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
         // Derived attributes
         baton.has_alpha = image.image_hasalpha();
         baton.orientation = exif_orientation(&image);
+
+        if baton.orientation >= 5 {
+            baton.width = image.get_height();
+            baton.height = image.get_width();
+        }
+
         // EXIF
         if image.get_typeof(VIPS_META_EXIF_NAME) == unsafe { vips_blob_get_type() } {
             let exif = image.get_blob(VIPS_META_EXIF_NAME).unwrap_or_default();

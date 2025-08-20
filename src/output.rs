@@ -2,14 +2,36 @@
 use crate::{
     in_range,
     metadata::{get_metadata, Metadata},
-    pipeline, Colour, InvalidParameterError, Sharp,
+    pipeline::{self, PipelineBaton},
+    Colour, InvalidParameterError, Sharp,
 };
 use num_derive::{FromPrimitive, ToPrimitive};
-use rs_vips::ops::{
-    BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression,
-    ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
+use rs_vips::{
+    bindings::vips_enum_nick,
+    ops::{
+        BandFormat, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, ForeignHeifCompression,
+        ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
+    },
 };
 use std::{collections::HashMap, path::Path};
+
+#[derive(Debug, Clone)]
+pub struct OutputInfo {
+    pub format: String,
+    pub width: i32,
+    pub height: i32,
+    pub channels: i32,
+    pub depth: i32,
+    pub premultiplied: bool,
+    pub crop_offset_left: i32,
+    pub crop_offset_top: i32,
+    pub attention_x: i32,
+    pub attention_y: i32,
+    pub trim_offset_left: i32,
+    pub trim_offset_top: i32,
+    pub page_height: i32,
+    pub pages: i32,
+}
 
 pub struct WithIccProfileOptions {
     /**  Should the ICC profile be included in the output image metadata? (optional, default true) */
@@ -23,11 +45,33 @@ pub struct Exif {
     pub ifd3: Option<HashMap<String, String>>,
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct WriteableMetadata {
     /** i32 of pixels per inch (DPI) */
     pub density: Option<f64>,
     /** Value between 1 and 8, used to update the EXIF Orientation tag. */
     pub orientation: Option<i32>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AvailableFormat {
+    pub id: String,
+    pub input: AvailableFormatInput,
+    pub output: AvailableFormatOutput,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AvailableFormatInput {
+    pub file: bool,
+    pub buffer: bool,
+    pub stream: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AvailableFormatOutput {
+    pub file: bool,
+    pub buffer: bool,
+    pub stream: bool,
 }
 
 #[derive(strum_macros::Display)]
@@ -178,9 +222,9 @@ pub struct JxlOptions {
     /** Force format output, otherwise attempt to use input format (optional, default true) */
     pub force: Option<bool>,
     /** Number of animation iterations, a value between 0 and 65535. Use 0 for infinite animation. (optional, default 0) */
-    pub loop_: Option<u32>,
+    pub loop_: Option<i32>,
     /** delay(s) between animation frames (in milliseconds), each value between 0 and 65535. (optional) */
-    pub delay: Option<u32>,
+    pub delay: Option<Vec<i32>>,
     /** Maximum encoding error, between 0 (highest quality) and 15 (lowest quality) (optional, default 1.0) */
     pub distance: Option<f64>,
     /** Calculate distance based on JPEG-like quality, between 1 and 100, overrides distance if specified */
@@ -198,9 +242,9 @@ pub struct WebpOptions {
     /** Force format output, otherwise attempt to use input format (optional, default true) */
     pub force: Option<bool>,
     /** Number of animation iterations, a value between 0 and 65535. Use 0 for infinite animation. (optional, default 0) */
-    pub loop_: Option<u32>,
+    pub loop_: Option<i32>,
     /** delay(s) between animation frames (in milliseconds), each value between 0 and 65535. (optional) */
-    pub delay: Option<u32>,
+    pub delay: Option<Vec<i32>>,
     /** Quality, integer 1-100 (optional, default 80) */
     pub quality: Option<i32>,
     /** Quality of alpha layer, i32 from 0-100 (optional, default 100) */
@@ -270,9 +314,9 @@ pub struct GifOptions {
     /** Force format output, otherwise attempt to use input format (optional, default true) */
     pub force: Option<bool>,
     /** Number of animation iterations, a value between 0 and 65535. Use 0 for infinite animation. (optional, default 0) */
-    pub loop_: Option<u32>,
+    pub loop_: Option<i32>,
     /** delay(s) between animation frames (in milliseconds), each value between 0 and 65535. (optional) */
-    pub delay: Option<u32>,
+    pub delay: Option<Vec<i32>>,
     /** Re-use existing palette, otherwise generate new (slow) */
     pub reuse: Option<bool>,
     /** Use progressive (interlace) scan */
@@ -419,6 +463,17 @@ impl Sharp {
         Ok(())
     }
 
+    pub fn to_file_with_info<P: AsRef<Path>>(mut self, file_out: P) -> Result<OutputInfo, String> {
+        let file_out_string = file_out.as_ref().to_string_lossy().to_string();
+        if self.options.input.file == file_out_string {
+            return Err("Cannot use same file for input and output".to_string());
+        }
+        self.options.file_out = file_out_string;
+        let baton = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
+
+        Ok(Self::create_output_info(baton))
+    }
+
     pub async fn to_file_async<P: AsRef<Path>>(mut self, file_out: P) -> Result<(), String> {
         let file_out_string = file_out.as_ref().to_string_lossy().to_string();
         if self.options.input.file == file_out_string {
@@ -431,6 +486,23 @@ impl Sharp {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn to_file_async_with_info<P: AsRef<Path>>(
+        mut self,
+        file_out: P,
+    ) -> Result<OutputInfo, String> {
+        let file_out_string = file_out.as_ref().to_string_lossy().to_string();
+        if self.options.input.file == file_out_string {
+            return Err("Cannot use same file for input and output".to_string());
+        }
+        self.options.file_out = file_out_string;
+        let baton = async_std::task::spawn(async move {
+            pipeline::pipline(self.options).map_err(|e| e.to_string())
+        })
+        .await?;
+
+        Ok(Self::create_output_info(baton))
     }
 
     /**
@@ -451,6 +523,13 @@ impl Sharp {
         Ok(baton.buffer_out)
     }
 
+    pub fn to_buffer_with_info(mut self) -> Result<(Vec<u8>, OutputInfo), String> {
+        self.options.file_out = String::new();
+        let baton = pipeline::pipline(self.options).map_err(|e| e.to_string())?;
+
+        Ok((baton.buffer_out.clone(), Self::create_output_info(baton)))
+    }
+
     pub async fn to_buffer_async(mut self) -> Result<Vec<u8>, String> {
         self.options.file_out = String::new();
         let baton = async_std::task::spawn(async move {
@@ -458,6 +537,54 @@ impl Sharp {
         })
         .await?;
         Ok(baton.buffer_out)
+    }
+
+    pub async fn to_buffer_with_info_async(mut self) -> Result<(Vec<u8>, OutputInfo), String> {
+        self.options.file_out = String::new();
+        let baton = async_std::task::spawn(async move {
+            pipeline::pipline(self.options).map_err(|e| e.to_string())
+        })
+        .await?;
+        Ok((baton.buffer_out.clone(), Self::create_output_info(baton)))
+    }
+
+    fn create_output_info(baton: PipelineBaton) -> OutputInfo {
+        let mut width = baton.width;
+        let mut height = baton.height;
+        if baton.top_offset_pre != -1 && (baton.width == -1 || baton.height == -1) {
+            width = baton.width_pre;
+            height = baton.height_pre;
+        }
+        if baton.top_offset_post != -1 {
+            width = baton.width_post;
+            height = baton.height_post;
+        }
+
+        OutputInfo {
+            format: baton.format_out.clone(),
+            width,
+            height,
+            channels: baton.channels,
+            depth: if baton.format_out == "raw" {
+                unsafe {
+                    vips_enum_nick(
+                        rs_vips::bindings::vips_band_format_get_type(),
+                        baton.raw_depth as i32,
+                    ) as i32
+                }
+            } else {
+                0
+            },
+            premultiplied: baton.premultiplied,
+            crop_offset_left: baton.crop_offset_left,
+            crop_offset_top: baton.crop_offset_top,
+            attention_x: baton.attention_x,
+            attention_y: baton.attention_y,
+            trim_offset_left: baton.trim_offset_left,
+            trim_offset_top: baton.trim_offset_top,
+            page_height: baton.page_height_out,
+            pages: baton.pages_out,
+        }
     }
 
     /**
@@ -1196,25 +1323,26 @@ impl Sharp {
      */
     fn try_set_animation_options(
         mut self,
-        loop_: Option<u32>,
-        delay: Option<u32>,
+        loop_: Option<i32>,
+        delay: Option<Vec<i32>>,
     ) -> Result<Self, String> {
         if let Some(loop_) = loop_ {
             if !in_range(loop_ as _, 0.0, 65535.0) {
                 return Err(InvalidParameterError!("loop", "integer between 0 and 65535", loop_));
             }
-            self.options.loop_ = loop_ as _;
+            self.options.loop_ = loop_;
         }
         if let Some(delay) = delay {
-            // We allow singular values as well
-            if !in_range(delay as _, 0.0, 65535.0) {
-                return Err(InvalidParameterError!(
-                    "delay",
-                    "integer or an array of integers between 0 and 65535",
-                    delay
-                ));
+            for v in &delay {
+                if !in_range(*v as _, 0.0, 65535.0) {
+                    return Err(InvalidParameterError!(
+                        "delay",
+                        "integer or an array of integers between 0 and 65535",
+                        delay
+                    ));
+                }
             }
-            self.options.delay = vec![delay as _];
+            self.options.delay = delay;
         }
 
         Ok(self)

@@ -1,12 +1,16 @@
 use crate::{
+    common::rgba_from_hex,
+    input::{
+        create_input_descriptor, CreateRaw, Input, Inputs, MixedInput, RotateOptions, SharpInput,
+        SharpOptions,
+    },
     operation::{
         AffineOptions, BlurOptions, BooleanOptions, ClaheOptions, FlattenOptions, KernelOptions,
         ModulateOptions, NegateOptions, NormaliseOptions, SharpenOptions, ThresholdOptions,
     },
+    output::AvailableFormat,
     pipeline::{init_options, PipelineBaton},
 };
-use common::{rgba_from_hex, InputDescriptor};
-use input::{create_input_descriptor, CreateRaw, RotateOptions, SharpInput, SharpOptions};
 pub use rs_vips::{
     ops::{
         BandFormat, BlendMode, Extend, FailOn, ForeignDzContainer, ForeignDzDepth, ForeignDzLayout,
@@ -15,7 +19,7 @@ pub use rs_vips::{
     },
     Vips,
 };
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 pub mod channel;
 pub mod colour;
@@ -44,11 +48,6 @@ macro_rules! InvalidParameterError {
 
 pub(crate) use InvalidParameterError;
 
-pub enum ImageKind {
-    File(String),
-    Buffer(Vec<u8>),
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct Colour {
     rgba: Vec<f64>,
@@ -57,7 +56,13 @@ pub struct Colour {
 impl Colour {
     pub fn new(r: u32, g: u32, b: u32, alpha: f32) -> Self {
         Self {
-            rgba: vec![r as _, g as _, b as _, alpha as _],
+            rgba: vec![r as _, g as _, b as _, 255.0 * alpha as f64],
+        }
+    }
+
+    pub fn rgb(r: u32, g: u32, b: u32) -> Self {
+        Self {
+            rgba: vec![r as _, g as _, b as _, 255.0],
         }
     }
 
@@ -73,13 +78,47 @@ pub struct Sharp {
 }
 
 impl Sharp {
-    pub fn new(options: SharpOptions) -> Result<Self, String> {
-        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
-        let mut all_options = init_options();
-        all_options.input = create_input_descriptor(SharpInput::None(), Some(options))?;
+    pub fn new(inputs: Inputs) -> Result<Self, String> {
+        Self::new_sharp(inputs, None)
+    }
 
+    pub fn new_with_opts(inputs: Inputs, options: SharpOptions) -> Result<Self, String> {
+        Self::new_sharp(inputs, Some(options))
+    }
+
+    fn new_sharp(inputs: Inputs, options: Option<SharpOptions>) -> Result<Self, String> {
+        if inputs.inner.is_empty() {
+            return Err("Expected at least one input".to_string());
+        }
+
+        if inputs.inner.len() > 1 {
+            return Self::new_sharp_from_inputs(inputs, options);
+        }
+
+        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+
+        let mut baton = init_options();
+        let input = inputs.inner.first().unwrap().clone();
+        baton.input = create_input_descriptor(SharpInput::Single(input), options, &mut baton)?;
         Ok(Self {
-            options: all_options,
+            options: baton,
+        })
+    }
+
+    fn new_sharp_from_inputs(
+        inputs: Inputs,
+        options: Option<SharpOptions>,
+    ) -> Result<Self, String> {
+        if inputs.inner.len() <= 1 {
+            return Err("Expected at least two inputs to join".to_string());
+        }
+
+        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+        let mut baton = init_options();
+        baton.input =
+            create_input_descriptor(SharpInput::Mixed(inputs.inner), options, &mut baton)?;
+        Ok(Self {
+            options: baton,
         })
     }
 
@@ -99,10 +138,14 @@ impl Sharp {
         options: Option<SharpOptions>,
     ) -> Result<Self, String> {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
-        let mut all_options = init_options();
-        all_options.input = create_input_descriptor(SharpInput::path(filename), options)?;
+        let mut baton = init_options();
+        baton.input = create_input_descriptor(
+            SharpInput::Single(MixedInput::path(filename)),
+            options,
+            &mut baton,
+        )?;
         Ok(Self {
-            options: all_options,
+            options: baton,
         })
     }
 
@@ -126,16 +169,13 @@ impl Sharp {
         }
 
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
-        let mut all_options = init_options();
-        // Join images together
-        let join: Result<Vec<InputDescriptor>, String> = files
-            .iter()
-            .map(|file| create_input_descriptor(SharpInput::path(file), options.clone()))
-            .collect();
-        all_options.join = join?;
+        let mut baton = init_options();
+        let inputs = files.iter().map(MixedInput::path).collect();
+        baton.input =
+            create_input_descriptor(SharpInput::Mixed(inputs), options.clone(), &mut baton)?;
 
         Ok(Self {
-            options: all_options,
+            options: baton,
         })
     }
 
@@ -155,11 +195,15 @@ impl Sharp {
         options: Option<SharpOptions>,
     ) -> Result<Self, String> {
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
-        let mut all_options = init_options();
-        all_options.input = create_input_descriptor(SharpInput::Buffer(buffer), options)?;
+        let mut baton = init_options();
+        baton.input = create_input_descriptor(
+            SharpInput::Single(MixedInput::Buffer(buffer)),
+            options.clone(),
+            &mut baton,
+        )?;
 
         Ok(Self {
-            options: all_options,
+            options: baton,
         })
     }
 
@@ -183,18 +227,13 @@ impl Sharp {
         }
 
         Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
-        let mut all_options = init_options();
-        // Join images together
-        let join: Result<Vec<InputDescriptor>, String> = buffers
-            .iter()
-            .map(|buffer| {
-                create_input_descriptor(SharpInput::Buffer(buffer.to_vec()), options.clone())
-            })
-            .collect();
-        all_options.join = join?;
+        let mut baton = init_options();
+        let inputs = buffers.into_iter().map(MixedInput::Buffer).collect();
+        baton.input =
+            create_input_descriptor(SharpInput::Mixed(inputs), options.clone(), &mut baton)?;
 
         Ok(Self {
-            options: all_options,
+            options: baton,
         })
     }
 
@@ -515,10 +554,10 @@ impl Sharp {
      */
     pub fn blur(mut self, options: Option<BlurOptions>) -> Result<Self, String> {
         if let Some(options) = options {
-            if !in_range(options.sigma, 0.3, 1000.0) {
+            if !in_range(options.sigma, 0.0, 1000.0) {
                 return Err(InvalidParameterError!(
                     "options.sigma",
-                    "number between 0.3 and 1000",
+                    "number between 0.0 and 1000",
                     sigma
                 ));
             }
@@ -685,8 +724,8 @@ impl Sharp {
      *   .toBuffer();
      *
      */
-    pub fn negate(mut self, options: Option<NegateOptions>) -> Result<Self, String> {
-        self.options.negate = true;
+    pub fn negate(mut self, negate: bool, options: Option<NegateOptions>) -> Result<Self, String> {
+        self.options.negate = negate;
         if let Some(options) = options {
             if let Some(alpha) = options.alpha {
                 self.options.negate_alpha = alpha;
@@ -867,9 +906,11 @@ impl Sharp {
         if let Some(options) = options {
             if let Some(grayscale) = options.grayscale {
                 self.options.threshold_grayscale = grayscale;
+            } else {
+                self.options.threshold_grayscale = false;
             }
         } else {
-            self.options.threshold_grayscale = false;
+            self.options.threshold_grayscale = true;
         }
 
         Ok(self)
@@ -884,7 +925,7 @@ impl Sharp {
      */
     pub fn boolean(
         mut self,
-        operand: SharpInput,
+        operand: Input,
         operator: OperationBoolean,
         options: Option<BooleanOptions>,
     ) -> Result<Self, String> {
@@ -895,10 +936,14 @@ impl Sharp {
                 height: options.raw.height,
                 channels: options.raw.channels,
                 premultiplied: false,
+                ..Default::default()
             });
         }
-        self.options.boolean_descriptor =
-            Some(create_input_descriptor(operand, Some(sharp_options))?);
+        self.options.boolean_descriptor = Some(create_input_descriptor(
+            SharpInput::Single(operand.inner),
+            Some(sharp_options),
+            &mut self.options,
+        )?);
 
         self.options.boolean_op = operator;
 
@@ -931,7 +976,7 @@ impl Sharp {
         } else if a.is_some() && b.is_none() {
             (a, Some(vec![0.0]))
         } else {
-            (None, None)
+            (a, b)
         };
 
         if let Some(a) = a {
@@ -1056,6 +1101,10 @@ impl Sharp {
             }
         }
         Ok(self)
+    }
+
+    pub fn available_formats() -> HashMap<String, AvailableFormat> {
+        util::available_formats()
     }
 }
 

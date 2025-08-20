@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-
+use nonstd::fs;
+use sharp::{operation::FlattenOptions, resize::ResizeOptions, Colour, Sharp};
 use std::path::{Path, PathBuf};
+pub mod maxcolor;
+
 pub fn inputJpgWithLandscapeExif1() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_1.jpg")
 }
@@ -329,4 +332,202 @@ pub fn testPattern() -> PathBuf {
 
 pub fn inputPngWithTransparent() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("d.png")
+}
+
+pub fn input(name: &str) -> PathBuf {
+    match name {
+        "inputJpgWithLandscapeExif1" => inputJpgWithLandscapeExif1(),
+        "inputJpgWithLandscapeExif2" => inputJpgWithLandscapeExif2(),
+        "inputJpgWithLandscapeExif3" => inputJpgWithLandscapeExif3(),
+        "inputJpgWithLandscapeExif4" => inputJpgWithLandscapeExif4(),
+        "inputJpgWithLandscapeExif5" => inputJpgWithLandscapeExif5(),
+        "inputJpgWithLandscapeExif6" => inputJpgWithLandscapeExif6(),
+        "inputJpgWithLandscapeExif7" => inputJpgWithLandscapeExif7(),
+        "inputJpgWithLandscapeExif8" => inputJpgWithLandscapeExif8(),
+        "inputJpgWithPortraitExif1" => inputJpgWithPortraitExif1(),
+        "inputJpgWithPortraitExif2" => inputJpgWithPortraitExif2(),
+        "inputJpgWithPortraitExif3" => inputJpgWithPortraitExif3(),
+        "inputJpgWithPortraitExif4" => inputJpgWithPortraitExif4(),
+        "inputJpgWithPortraitExif5" => inputJpgWithPortraitExif5(),
+        "inputJpgWithPortraitExif6" => inputJpgWithPortraitExif6(),
+        "inputJpgWithPortraitExif7" => inputJpgWithPortraitExif7(),
+        "inputJpgWithPortraitExif8" => inputJpgWithPortraitExif8(),
+        "inputJpg" => inputJpg(),
+        "inputJpgWithExif" => inputJpgWithExif(),
+        "inputJpgWithIptcAndXmp" => inputJpgWithIptcAndXmp(),
+        "inputJpgWithExifMirroring" => inputJpgWithExifMirroring(),
+        "inputJpgWithGammaHoliness" => inputJpgWithGammaHoliness(),
+        "inputJpgWithCmykProfile" => inputJpgWithCmykProfile(),
+        "inputJpgWithCmykNoProfile" => inputJpgWithCmykNoProfile(),
+        "inputJpgWithCorruptHeader" => inputJpgWithCorruptHeader(),
+        "inputJpgWithLowContrast" => inputJpgWithLowContrast(),
+        "inputJpgLarge" => inputJpgLarge(),
+        "inputJpg320x240" => inputJpg320x240(),
+        "inputJpgOverlayLayer2" => inputJpgOverlayLayer2(),
+        "inputJpgTruncated" => inputJpgTruncated(),
+        "inputJpgCenteredImage" => inputJpgCenteredImage(),
+        "inputJpgRandom" => inputJpgRandom(),
+        "inputJpgThRandom" => inputJpgThRandom(),
+        "inputJpgLossless" => inputJpgLossless(),
+        "inputPng" => inputPng(),
+        "inputPngGradients" => inputPngGradients(),
+        "inputPngWithTransparency" => inputPngWithTransparency(),
+        "inputPngCompleteTransparency" => inputPngCompleteTransparency(),
+        "inputPngWithGreyAlpha" => inputPngWithGreyAlpha(),
+        "inputPngWithOneColor" => inputPngWithOneColor(),
+        "inputPngWithTransparency16bit" => inputPngWithTransparency16bit(),
+        "inputPng8BitGreyBackground" => inputPng8BitGreyBackground(),
+        "inputPng16BitGreyBackground" => inputPng16BitGreyBackground(),
+        "inputPng16BitGreyAlpha" => inputPng16BitGreyAlpha(),
+        "inputPngOverlayLayer0" => inputPngOverlayLayer0(),
+        "inputPngOverlayLayer1" => inputPngOverlayLayer1(),
+        "inputPngAlphaPremultiplicationSmall" => inputPngAlphaPremultiplicationSmall(),
+        "inputPngAlphaPremultiplicationLarge" => inputPngAlphaPremultiplicationLarge(),
+        "inputPngBooleanNoAlpha" => inputPngBooleanNoAlpha(),
+        "inputPngTestJoinChannel" => inputPngTestJoinChannel(),
+        "inputPngTruncated" => inputPngTruncated(),
+        "inputPngEmbed" => inputPngEmbed(),
+        "inputPngRGBWithAlpha" => inputPngRGBWithAlpha(),
+        "inputPngImageInAlpha" => inputPngImageInAlpha(),
+        "inputPngSolidAlpha" => inputPngSolidAlpha(),
+        "inputPngP3" => inputPngP3(),
+        "inputPngPalette" => inputPngPalette(),
+        "inputPngTrimIncludeAlpha" => inputPngTrimIncludeAlpha(),
+        "inputPngTrimSpecificColour" => inputPngTrimSpecificColour(),
+        "inputPngTrimSpecificColour16bit" => inputPngTrimSpecificColour16bit(),
+        "inputPngTrimSpecificColourIncludeAlpha" => inputPngTrimSpecificColourIncludeAlpha(),
+        "inputPngUint32Limit" => inputPngUint32Limit(),
+        "inputPngWithProPhotoProfile" => inputPngWithProPhotoProfile(),
+        "inputWebP" => inputWebP(),
+        "inputWebPWithTransparency" => inputWebPWithTransparency(),
+        "inputWebPAnimated" => inputWebPAnimated(),
+        "inputWebPAnimatedLoop3" => inputWebPAnimatedLoop3(),
+        "inputWebPAnimatedBigHeight" => inputWebPAnimatedBigHeight(),
+        "inputTiff" => inputTiff(),
+        "inputTiffMultipage" => inputTiffMultipage(),
+        "inputTiffCielab" => inputTiffCielab(),
+        "inputTiffUncompressed" => inputTiffUncompressed(),
+        "inputTiff8BitDepth" => inputTiff8BitDepth(),
+        "inputTifftagPhotoshop" => inputTifftagPhotoshop(),
+        "inputTiffFogra" => inputTiffFogra(),
+        "inputJp2" => inputJp2(),
+        "inputJp2TileParts" => inputJp2TileParts(),
+        "inputGif" => inputGif(),
+        "inputGifGreyPlusAlpha" => inputGifGreyPlusAlpha(),
+        "inputGifAnimated" => inputGifAnimated(),
+        "inputGifAnimatedLoop3" => inputGifAnimatedLoop3(),
+        "inputSvg" => inputSvg(),
+        "inputSvgSmallViewBox" => inputSvgSmallViewBox(),
+        "inputSvgWithEmbeddedImages" => inputSvgWithEmbeddedImages(),
+        "inputAvif" => inputAvif(),
+        "inputJPGBig" => inputJPGBig(),
+        "inputPngDotAndLines" => inputPngDotAndLines(),
+        "inputPngStripesV" => inputPngStripesV(),
+        "inputPngStripesH" => inputPngStripesH(),
+        "inputJpgBooleanTest" => inputJpgBooleanTest(),
+        "inputV" => inputV(),
+        "inputJpgClahe" => inputJpgClahe(),
+        "testPattern" => testPattern(),
+        _ => testPattern(),
+    }
+}
+enum PathOrBuffer {
+    Path(String),
+    Buffer(Vec<u8>),
+}
+
+fn fingerprint(image: PathOrBuffer) -> Result<Vec<u8>, String> {
+    let sharp = match image {
+        PathOrBuffer::Buffer(buffer) => Sharp::new_from_buffer(buffer).unwrap(),
+        PathOrBuffer::Path(file) => Sharp::new_from_file(file).unwrap(),
+    };
+    let data = sharp
+        .flatten(Some(FlattenOptions {
+            background: Some(Colour::from_hex(0x808080)),
+        }))
+        .unwrap()
+        .greyscale(true)
+        .normalise(None)
+        .unwrap()
+        .resize_with_opts(ResizeOptions {
+            width: Some(9),
+            height: Some(8),
+            fit: Some(sharp::resize::Fit::Fill),
+            ..Default::default()
+        })
+        .unwrap()
+        .raw(None)
+        .unwrap()
+        .to_buffer()?;
+
+    let mut fingerprint = Vec::new();
+    for col in 0..8 {
+        for row in 0..8 {
+            let left = data[(row * 8) + col];
+            let right = data[(row * 8) + col + 1];
+            fingerprint.push(if left < right {
+                1
+            } else {
+                0
+            });
+        }
+    }
+    Ok(fingerprint)
+}
+
+pub fn assert_similar_<P: AsRef<Path>>(
+    expected: P,
+    actual: Vec<u8>,
+    threshold: Option<i32>,
+) -> Result<(), String> {
+    let expectedFingerprint =
+        fingerprint(PathOrBuffer::Path(expected.as_ref().to_string_lossy().to_string()))?;
+    let actualFingerprint = fingerprint(PathOrBuffer::Buffer(actual))?;
+    let mut distance = 0;
+    for i in 0..64 {
+        if expectedFingerprint[i] != actualFingerprint[i] {
+            distance += 1;
+        }
+    }
+    let threshold = threshold.unwrap_or(5);
+    if distance > threshold {
+        return Err(format!(
+            "Expected maximum similarity distance: {:?}. Actual:{:?}",
+            threshold, distance
+        ));
+    }
+    Ok(())
+}
+
+pub fn path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join(name)
+}
+
+pub fn expected(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("expected").join(name)
+}
+
+pub fn output(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("output").join(name)
+}
+
+pub fn clean_up() {
+    fs::readdir(output(""), false, false)
+        .unwrap()
+        .into_iter()
+        .for_each(|ent| fs::delete(ent.full_path).unwrap());
+}
+
+#[macro_export]
+macro_rules! assert_similar {
+    ($expected:expr, $actual:expr, $th:expr) => {
+        $crate::fixtures::assert_similar_($expected, $actual, $th).unwrap();
+    };
+}
+
+#[macro_export]
+macro_rules! assert_max_colour_distance {
+    ($actual:expr, $expected:expr, $th:expr) => {
+        $crate::fixtures::maxcolor::assert_max_colour_distance($actual, $expected, $th).unwrap();
+    };
 }

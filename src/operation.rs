@@ -7,12 +7,11 @@ use rs_vips::{
     operator::{Ge, Index, Lt},
     ops::{
         BandFormat, Extend, ForeignWebpPreset, Interpretation, OperationBoolean,
-        OperationMorphology, OperationRelational, Precision,
+        OperationMorphology, Precision,
     },
     voption::{Setter, VOption},
     Result, VipsImage,
 };
-use std::slice;
 use strum_macros::Display;
 
 #[derive(Debug, Clone, Default)]
@@ -136,7 +135,7 @@ pub struct ThresholdOptions {
 pub struct Raw {
     pub width: i32,
     pub height: i32,
-    pub channels: u32,
+    pub channels: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -361,10 +360,9 @@ pub(crate) fn convolve(
     offset: f64,
     kernel_v: &[f64],
 ) -> Result<VipsImage> {
-    let bytes: &[u8] = unsafe {
-        slice::from_raw_parts(kernel_v.as_ptr() as *const u8, std::mem::size_of_val(kernel_v))
-    };
-    let kernel = VipsImage::new_from_memory(bytes, width, height, 1, BandFormat::Double)?;
+    let bytes: Vec<u8> = kernel_v.iter().flat_map(|f| f.to_ne_bytes()).collect();
+    let kernel =
+        VipsImage::new_from_memory(bytes.as_slice(), width, height, 1, BandFormat::Double)?;
     kernel.set_double("scale", scale);
     kernel.set_double("offset", offset);
     image.conv(&kernel)
@@ -468,9 +466,7 @@ pub(crate) fn threshold(
     if !threshold_grayscale {
         Ok(image.ge(threshold))
     } else {
-        image
-            .colourspace(Interpretation::BW)?
-            .relational_const(OperationRelational::Moreeq, &[threshold])
+        Ok(image.colourspace(Interpretation::BW)?.ge(threshold))
     }
 }
 
@@ -598,9 +594,7 @@ pub(crate) fn unflatten(image: VipsImage) -> Result<VipsImage> {
         let no_alpha = remove_alpha(image)?;
         no_alpha.bandjoin_with(alpha & (no_alpha.colourspace(Interpretation::BW)?.lt(255.0)))
     } else {
-        image
-            .colourspace(Interpretation::BW)?
-            .bandjoin_with(image.colourspace(Interpretation::BW)?.lt(255.0))
+        image.bandjoin_with(image.colourspace(Interpretation::BW)?.lt(255.0))
     }
 }
 

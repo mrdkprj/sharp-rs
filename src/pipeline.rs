@@ -138,7 +138,8 @@ pub(crate) struct PipelineBaton {
     pub(crate) angle: i32,
     pub(crate) rotation_angle: f64,
     pub(crate) rotation_background: Vec<f64>,
-    pub(crate) rotate_before_pre_extract: bool,
+    pub(crate) rotate_before: bool,
+    pub(crate) orient_before: bool,
     pub(crate) flip: bool,
     pub(crate) flop: bool,
     pub(crate) extend_top: i32,
@@ -437,7 +438,8 @@ impl Default for PipelineBaton {
             precision: Precision::Approximate,
             min_ampl: 0.0,
             gamma_out: 0.0,
-            rotate_before_pre_extract: false,
+            rotate_before: false,
+            orient_before: false,
             err: String::new(),
             with_icc_profile: String::new(),
             with_exif: HashMap::new(),
@@ -470,7 +472,8 @@ pub(crate) fn init_options() -> PipelineBaton {
         angle: 0,
         rotation_angle: 0.0,
         rotation_background: vec![0.0, 0.0, 0.0, 255.0],
-        rotate_before_pre_extract: false,
+        rotate_before: false,
+        orient_before: false,
         flip: false,
         flop: false,
         extend_top: 0,
@@ -654,9 +657,10 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         } else {
             baton.input.join_background.pop();
         }
+
         let input_image_type = ImageType::Png;
         let image = VipsImage::arrayjoin_with_opts(
-            images.as_mut_slice(),
+            images.as_slice(),
             VOption::new()
                 .set("across", baton.input.join_across)
                 .set("shim", baton.input.join_shim)
@@ -664,12 +668,15 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 .set("halign", baton.input.join_halign as i32)
                 .set("valign", baton.input.join_valign as i32),
         )?;
+
         if baton.input.join_animated {
             let image = image.copy()?;
             image.set_int(VIPS_META_N_PAGES, images.len() as _);
             image.set_int(VIPS_META_PAGE_HEIGHT, image.get_height() / images.len() as i32);
+            (image, input_image_type)
+        } else {
+            (image, input_image_type)
         }
-        (image, input_image_type)
     };
 
     let access = baton.input.access;
@@ -689,37 +696,23 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     let mut page_height = image.get_page_height();
 
     // Calculate angle of rotation
-    let (mut auto_rotation, mut auto_flip, mut auto_flop) = if baton.input.auto_orient {
+    let (mut auto_rotation, mut auto_flop) = if baton.input.auto_orient {
         // Rotate and flip image according to Exif orientation
-        let (auto_rotation, auto_flip, auto_flop) =
-            calculate_exif_rotation_and_flip(exif_orientation(&image));
-        image = remove_exif_orientation(image)?;
-        (auto_rotation, auto_flip, auto_flop)
+        calculate_exif_rotation_and_flop(exif_orientation(&image))
     } else {
-        (Angle::D0, false, false)
+        (Angle::D0, false)
     };
 
     let mut rotation = calculate_angle_rotation(baton.angle);
 
     // Rotate pre-extract
-    let should_rotate_before = baton.rotate_before_pre_extract
-        && (rotation != Angle::D0
-            || auto_rotation != Angle::D0
-            || auto_flip
-            || baton.flip
-            || auto_flop
-            || baton.flop
-            || baton.rotation_angle != 0.0);
-    if should_rotate_before {
-        image = stay_sequential(
-            image,
-            rotation != Angle::D0
-                || auto_rotation != Angle::D0
-                || auto_flip
-                || baton.flip
-                || baton.rotation_angle != 0.0,
-        )?;
+    let should_rotate_before = baton.rotate_before
+        && (rotation != Angle::D0 || baton.flip || baton.flop || baton.rotation_angle != 0.0);
+    let should_orient_before =
+        (should_rotate_before || baton.orient_before) && (auto_rotation != Angle::D0 || auto_flop);
 
+    if should_orient_before {
+        image = stay_sequential(image, auto_rotation != Angle::D0)?;
         if auto_rotation != Angle::D0 {
             if auto_rotation != Angle::D180 {
                 multi_page_unsupported(n_pages, "Rotate")?;
@@ -727,14 +720,24 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             image = image.rot(auto_rotation)?;
             auto_rotation = Angle::D0;
         }
-        if auto_flip != baton.flip {
+        if auto_flop {
+            image = image.flip(Direction::Horizontal)?;
+            auto_flop = false;
+        }
+    }
+
+    if should_rotate_before {
+        image = stay_sequential(
+            image,
+            rotation != Angle::D0 || baton.flip || baton.rotation_angle != 0.0,
+        )?;
+
+        if baton.flip {
             image = image.flip(Direction::Vertical)?;
-            auto_flip = false;
             baton.flip = false;
         }
-        if auto_flop != baton.flop {
-            image = image.flip(Direction::Vertical)?;
-            auto_flop = false;
+        if baton.flop {
+            image = image.flip(Direction::Horizontal)?;
             baton.flop = false;
         }
         if rotation != Angle::D0 {
@@ -754,6 +757,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             )?;
 
             image = VipsImage::image_copy_memory(image)?;
+            baton.rotation_angle = 0.0;
         }
     }
 
@@ -804,9 +808,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // When auto-rotating by 90 or 270 degrees, swap the target width and
     // height to ensure the behavior aligns with how it would have been if
     // the rotation had taken place *before* resizing.
-    if !baton.rotate_before_pre_extract
-        && (auto_rotation == Angle::D90 || auto_rotation == Angle::D270)
-    {
+    if auto_rotation == Angle::D90 || auto_rotation == Angle::D270 {
         std::mem::swap(&mut target_resize_width, &mut target_resize_height);
     }
 
@@ -837,7 +839,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         && baton.top_offset_pre == -1
         && baton.trim_threshold < 0.0
         && baton.colourspace_pipeline == Interpretation::Last
-        && !should_rotate_before;
+        && !(should_orient_before || should_rotate_before);
 
     if should_pre_shrink {
         // The common part of the shrink: the bit by which both axes must be shrunk
@@ -954,6 +956,10 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         }
         image
     };
+
+    if baton.input.auto_orient {
+        image = remove_exif_orientation(image)?;
+    }
 
     // Any pre-shrinking may already have been done
     input_width = image.get_width();
@@ -1078,10 +1084,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         )?;
     }
 
-    image = stay_sequential(
-        image,
-        auto_rotation != Angle::D0 || baton.flip || auto_flip || rotation != Angle::D0,
-    )?;
+    image =
+        stay_sequential(image, auto_rotation != Angle::D0 || baton.flip || rotation != Angle::D0)?;
     // Auto-rotate post-extract
     if auto_rotation != Angle::D0 {
         if auto_rotation != Angle::D180 {
@@ -1090,7 +1094,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         image = image.rot(auto_rotation)?;
     }
     // Mirror vertically (up-down) about the x-axis
-    if baton.flip != auto_flip {
+    if baton.flip {
         image = image.flip(Direction::Vertical)?;
     }
     // Mirror horizontally (left-right) about the y-axis
@@ -1213,7 +1217,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 image = stay_sequential(image, true)?;
                 let mut attention_x = 0;
                 let mut attention_y = 0;
-                let image = image.smartcrop_with_opts(
+                image = image.smartcrop_with_opts(
                     baton.width,
                     baton.height,
                     VOption::new()
@@ -1233,14 +1237,16 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 baton.crop_offset_left = image.get_xoffset();
                 baton.crop_offset_top = image.get_yoffset();
                 baton.has_attention_center = true;
-                baton.attention_x = attention_x * jpeg_shrink_on_load / scale as i32;
-                baton.attention_y = attention_y * jpeg_shrink_on_load / scale as i32;
+                baton.attention_x =
+                    (attention_x as f64 * jpeg_shrink_on_load as f64 / scale) as i32;
+                baton.attention_y =
+                    (attention_y as f64 * jpeg_shrink_on_load as f64 / scale) as i32;
             }
         }
     }
 
     // Rotate post-extract non-90 angle
-    if !baton.rotate_before_pre_extract && baton.rotation_angle != 0.0 {
+    if !baton.rotate_before && baton.rotation_angle != 0.0 {
         multi_page_unsupported(n_pages, "Rotate")?;
         image = stay_sequential(image, true)?;
 
@@ -1452,24 +1458,18 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         for composite in baton.composite.as_mut_slice() {
             composite.input.access = access;
             let (mut composite_image, _) = open_input(&composite.input)?;
-            composite_image = ensure_colourspace(composite_image, baton.colourspace_pipeline)?;
 
             if composite.input.auto_orient {
                 // Respect EXIF Orientation
-                let (composite_auto_rotation, composite_auto_flip, composite_auto_flop) =
-                    calculate_exif_rotation_and_flip(exif_orientation(&composite_image));
+                let (composite_auto_rotation, composite_auto_flop) =
+                    calculate_exif_rotation_and_flop(exif_orientation(&composite_image));
 
                 composite_image = remove_exif_orientation(composite_image)?;
-                composite_image = stay_sequential(
-                    composite_image,
-                    composite_auto_rotation != Angle::D0 || composite_auto_flip,
-                )?;
+                composite_image =
+                    stay_sequential(composite_image, composite_auto_rotation != Angle::D0)?;
 
                 if composite_auto_rotation != Angle::D0 {
                     composite_image = composite_image.rot(composite_auto_rotation)?;
-                }
-                if composite_auto_flip {
-                    composite_image = composite_image.flip(Direction::Vertical)?;
                 }
                 if composite_auto_flop {
                     composite_image = composite_image.flip(Direction::Horizontal)?;
@@ -1484,6 +1484,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                     "Image to composite must have same dimensions or smaller".to_string(),
                 ));
             }
+
             // Check if overlay is tiled
             if composite.tile {
                 let mut across = 0;
@@ -1536,9 +1537,9 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 // gravity was used for extract_area, set it back to its default value of 0
                 composite.gravity = 0;
             }
-            // Ensure image to composite is sRGB with unpremultiplied alpha
-            composite_image = composite_image.colourspace(Interpretation::Srgb)?;
+            // Ensure image to composite is with unpremultiplied alpha
             composite_image = ensure_alpha(composite_image, 1.0)?;
+
             if composite.premultiplied {
                 composite_image = composite_image.unpremultiply()?;
             }
@@ -1567,16 +1568,28 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                     composite.gravity,
                 )
             };
+
             images.push(composite_image);
             modes.push(composite.mode as i32);
             xs.push(left);
             ys.push(top);
         }
+
         images.insert(0, image);
         image = VipsImage::composite_with_opts(
             images.as_mut_slice(),
             modes.as_mut_slice(),
-            VOption::new().set("x", xs.as_slice()).set("y", ys.as_slice()),
+            VOption::new()
+                .set(
+                    "compositing_space",
+                    if baton.colourspace_pipeline == Interpretation::Last {
+                        Interpretation::Srgb
+                    } else {
+                        baton.colourspace_pipeline
+                    } as i32,
+                )
+                .set("x", xs.as_slice())
+                .set("y", ys.as_slice()),
         )?;
         image = remove_gif_palette(image)?;
     }
@@ -2303,34 +2316,34 @@ fn write(
 
     Ok(baton)
 }
+
 /*
-  Calculate the angle of rotation and need-to-flip for the given Exif orientation
-  By default, returns zero, i.e. no rotation.
+    Calculate the angle of rotation and need-to-flip for the given Exif orientation
+    By default, returns zero, i.e. no rotation.
 */
-fn calculate_exif_rotation_and_flip(exif_orientation: i32) -> (Angle, bool, bool) {
+fn calculate_exif_rotation_and_flop(exif_orientation: i32) -> (Angle, bool) {
     let mut rotate = Angle::D0;
-    let mut flip = false;
     let mut flop = false;
     match exif_orientation {
         6 => rotate = Angle::D90,
         3 => rotate = Angle::D180,
         8 => rotate = Angle::D270,
-        2 => flop = true, // flop 1
+        2 => flop = true,
         7 => {
-            flip = true;
-            rotate = Angle::D90
-        } // flip 6
+            flop = true;
+            rotate = Angle::D270
+        }
         4 => {
             flop = true;
             rotate = Angle::D180
-        } // flop 3
+        }
         5 => {
-            flip = true;
-            rotate = Angle::D270
-        } // flip 8
+            flop = true;
+            rotate = Angle::D90
+        }
         _ => {}
     }
-    (rotate, flip, flop)
+    (rotate, flop)
 }
 
 /*

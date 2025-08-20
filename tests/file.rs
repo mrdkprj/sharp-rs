@@ -1,5 +1,5 @@
 use sharp::{
-    input::{Create, CreateRaw, CreateText, Noise, SharpOptions},
+    input::{Create, CreateRaw, CreateText, Inputs, Noise, SharpOptions},
     FailOn, Sharp,
 };
 use std::path::Path;
@@ -70,9 +70,8 @@ fn overwrite() {
 
 // Create a blank 300x200 PNG image of semi-translucent red pixels
 fn create() {
-    Sharp::new(SharpOptions {
-        fail_on: Some(FailOn::None),
-        create: Some(Create {
+    Sharp::new_with_opts(
+        Inputs::new().create(Create {
             width: 300,
             height: 200,
             channels: 4,
@@ -80,8 +79,11 @@ fn create() {
             noise: None,
             ..Default::default()
         }),
-        ..Default::default()
-    })
+        SharpOptions {
+            fail_on: Some(FailOn::None),
+            ..Default::default()
+        },
+    )
     .unwrap()
     .png(None)
     .unwrap()
@@ -131,21 +133,18 @@ fn buf() {
 
 // Generate RGB Gaussian noise
 fn rgb() {
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 300,
-            height: 200,
-            channels: 3,
-            background: sharp::Colour::from_hex(0),
-            noise: Some(Noise {
-                gaussian: Some(true),
-                mean: Some(128.0),
-                sigma: Some(30.0),
-            }),
-            ..Default::default()
+    Sharp::new(Inputs::new().create(Create {
+        width: 300,
+        height: 200,
+        channels: 3,
+        background: sharp::Colour::from_hex(0),
+        noise: Some(Noise {
+            gaussian: Some(true),
+            mean: Some(128.0),
+            sigma: Some(30.0),
         }),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("output").join("noise.png"))
     .unwrap();
@@ -153,15 +152,12 @@ fn rgb() {
 
 // Generate an image from text
 fn text() {
-    Sharp::new(SharpOptions {
-        text: Some(CreateText {
-            text: "Hellow, World!".to_string(),
-            width: Some(400),
-            height: Some(300),
-            ..Default::default()
-        }),
+    Sharp::new(Inputs::new().text(CreateText {
+        text: "Hellow, World!".to_string(),
+        width: Some(400),
+        height: Some(300),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .to_file(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("output").join("text_bw.png"))
     .unwrap();
@@ -169,17 +165,14 @@ fn text() {
 
 // Generate an rgba image from text using pango markup and font
 fn text_rgba() {
-    Sharp::new(SharpOptions {
-        text: Some(CreateText {
-            text: r#"<span foreground="red">Red!</span><span background="cyan">blue</span>"#
-                .to_string(),
-            font: Some("sans".to_string()),
-            rgba: Some(true),
-            dpi: Some(300),
-            ..Default::default()
-        }),
+    Sharp::new(Inputs::new().text(CreateText {
+        text:
+            r#"<span foreground="red">Red!</span><span background="cyan">blue</span>"#.to_string(),
+        font: Some("sans".to_string()),
+        rgba: Some(true),
+        dpi: Some(300),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .to_file(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("output").join("text_rgba.png"),

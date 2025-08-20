@@ -1,6 +1,6 @@
 mod fixtures;
 use sharp::{
-    input::{Create, SharpOptions},
+    input::{Create, Inputs},
     operation::ModulateOptions,
     output::PngOptions,
     Colour, Sharp,
@@ -9,16 +9,13 @@ use sharp::{
 #[test]
 pub fn modulate() {
     //should be able to hue-rotate
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 0.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .modulate(Some(ModulateOptions {
         hue: Some(120),
@@ -29,18 +26,16 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![41, 107, 57], data[0..3]);
 
     //should be able to brighten
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 1.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .modulate(Some(ModulateOptions {
         brightness: Some(2.0),
@@ -51,18 +46,16 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![255, 173, 168], data[0..3]);
 
     //should be able to darken
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 1.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .modulate(Some(ModulateOptions {
         brightness: Some(0.5),
@@ -73,18 +66,16 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![97, 17, 25], data[0..3]);
 
     //should be able to saturate
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 1.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .modulate(Some(ModulateOptions {
         saturation: Some(2.0),
@@ -95,18 +86,16 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![198, 0, 43], data[0..3]);
 
     //should be able to desaturate
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 1.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .modulate(Some(ModulateOptions {
         saturation: Some(0.5),
@@ -117,18 +106,16 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![127, 83, 81], data[0..3]);
 
     //should be able to lighten
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 1.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .modulate(Some(ModulateOptions {
         lightness: Some(10.0),
@@ -139,18 +126,16 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![182, 93, 92], data[0..3]);
 
     //should be able to modulate all channels
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 1.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
     .modulate(Some(ModulateOptions {
         brightness: Some(2.0),
@@ -163,22 +148,20 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![149, 209, 214], data[0..3]);
 
     //'should be able to use linear and modulate together
     let contrast = 1.5;
     let brightness = 0.5;
-    Sharp::new(SharpOptions {
-        create: Some(Create {
-            width: 1,
-            height: 1,
-            channels: 3,
-            background: Colour::new(153, 68, 68, 0.0),
-            ..Default::default()
-        }),
+    let data = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 3,
+        background: Colour::new(153, 68, 68, 1.0),
         ..Default::default()
-    })
+    }))
     .unwrap()
-    .linear(Some(vec![contrast]), Some(vec![128.0 * contrast + 128.0]))
+    .linear(Some(vec![contrast]), Some(vec![-(128.0 * contrast) + 128.0]))
     .unwrap()
     .modulate(Some(ModulateOptions {
         brightness: Some(brightness),
@@ -189,11 +172,15 @@ pub fn modulate() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(vec![81, 0, 0], data[0..3]);
 
     Sharp::cache(true);
     //hue-rotate
     [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360].iter().for_each(|angle| {
-        let _ = Sharp::new_from_file(fixtures::testPattern())
+        let base = format!("modulate-hue-angle-{:?}.png", angle);
+        let actual = fixtures::output(&format!("output.{}", base));
+        let expected = fixtures::expected(&base);
+        Sharp::new_from_file(fixtures::testPattern())
             .unwrap()
             .resize(320, 320)
             .unwrap()
@@ -207,7 +194,8 @@ pub fn modulate() {
                 ..Default::default()
             }))
             .unwrap()
-            .to_buffer()
+            .to_file(actual.clone())
             .unwrap();
+        assert_max_colour_distance!(actual, expected, 3.0);
     });
 }

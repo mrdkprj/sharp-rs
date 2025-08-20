@@ -1,18 +1,21 @@
 mod fixtures;
 use sharp::{
     composite::OverlayOptions,
-    input::{Create, SharpOptions},
+    input::{Create, Input, Inputs, SharpOptions},
     output::PngOptions,
-    resize::ExtendOptions,
+    resize::{ExtendOptions, ResizeOptions},
     Colour, Extend, Sharp,
 };
 
 #[test]
 pub fn extend() {
     //extend all sides equally via a single value
-    Sharp::new_from_file(fixtures::inputJpg())
+    let (data, info) = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
-        .resize(120, 120)
+        .resize_with_opts(ResizeOptions {
+            width: Some(120),
+            ..Default::default()
+        })
         .unwrap()
         .extend(ExtendOptions {
             top: Some(10),
@@ -22,11 +25,14 @@ pub fn extend() {
             ..Default::default()
         })
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(140, info.width);
+    assert_eq!(118, info.height);
+    assert_similar!(fixtures::expected("extend-equal-single.jpg"), data, None);
 
     //extend all sides equally via a single value, Animated WebP
-    Sharp::new_from_file_with_opts(
+    let (data, info) = Sharp::new_from_file_with_opts(
         fixtures::inputWebPAnimated(),
         SharpOptions {
             pages: Some(-1),
@@ -34,7 +40,10 @@ pub fn extend() {
         },
     )
     .unwrap()
-    .resize(120, 120)
+    .resize_with_opts(ResizeOptions {
+        width: Some(120),
+        ..Default::default()
+    })
     .unwrap()
     .extend(ExtendOptions {
         top: Some(10),
@@ -44,12 +53,15 @@ pub fn extend() {
         ..Default::default()
     })
     .unwrap()
-    .to_buffer()
+    .to_buffer_with_info()
     .unwrap();
+    assert_eq!(140, info.width);
+    assert_eq!(140 * 9, info.height);
+    assert_similar!(fixtures::expected("extend-equal-single.webp"), data, None);
 
     [Extend::Background, Extend::Copy, Extend::Mirror, Extend::Repeat].iter().for_each(|e| {
         //extends all sides with animated WebP
-        Sharp::new_from_file_with_opts(
+        let (data, info) = Sharp::new_from_file_with_opts(
             fixtures::inputWebPAnimated(),
             SharpOptions {
                 pages: Some(-1),
@@ -57,7 +69,10 @@ pub fn extend() {
             },
         )
         .unwrap()
-        .resize(120, 120)
+        .resize_with_opts(ResizeOptions {
+            width: Some(120),
+            ..Default::default()
+        })
         .unwrap()
         .extend(ExtendOptions {
             top: Some(40),
@@ -68,13 +83,23 @@ pub fn extend() {
             ..Default::default()
         })
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+        assert_eq!(200, info.width);
+        assert_eq!(200 * 9, info.height);
+        assert_similar!(
+            fixtures::expected(&format!("extend-equal-{}.webp", extend_to_string(*e))),
+            data,
+            None
+        );
 
         //extend all sides equally with RGB
-        Sharp::new_from_file(fixtures::inputJpg())
+        let (data, info) = Sharp::new_from_file(fixtures::inputJpg())
             .unwrap()
-            .resize(120, 120)
+            .resize_with_opts(ResizeOptions {
+                width: Some(120),
+                ..Default::default()
+            })
             .unwrap()
             .extend(ExtendOptions {
                 top: Some(10),
@@ -85,13 +110,23 @@ pub fn extend() {
                 background: Some(Colour::new(255, 0, 0, 1.0)),
             })
             .unwrap()
-            .to_buffer()
+            .to_buffer_with_info()
             .unwrap();
+        assert_eq!(140, info.width);
+        assert_eq!(118, info.height);
+        assert_similar!(
+            fixtures::expected(&format!("extend-equal-{}.jpg", extend_to_string(*e))),
+            data,
+            None
+        );
 
         //extend sides unequally with RGBA
-        Sharp::new_from_file(fixtures::inputPngWithTransparency16bit())
+        let (data, info) = Sharp::new_from_file(fixtures::inputPngWithTransparency16bit())
             .unwrap()
-            .resize(120, 120)
+            .resize_with_opts(ResizeOptions {
+                width: Some(120),
+                ..Default::default()
+            })
             .unwrap()
             .extend(ExtendOptions {
                 top: Some(50),
@@ -102,11 +137,18 @@ pub fn extend() {
                 ..Default::default()
             })
             .unwrap()
-            .to_buffer()
+            .to_buffer_with_info()
             .unwrap();
+        assert_eq!(165, info.width);
+        assert_eq!(170, info.height);
+        assert_similar!(
+            fixtures::expected(&format!("extend-unequal-{}.png", extend_to_string(*e))),
+            data,
+            None
+        );
 
         //PNG with 2 channels
-        Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
+        let (data, info) = Sharp::new_from_file(fixtures::inputPngWithGreyAlpha())
             .unwrap()
             .extend(ExtendOptions {
                 top: Some(50),
@@ -117,12 +159,21 @@ pub fn extend() {
                 background: Some(Colour::new(0, 0, 0, 0.0)),
             })
             .unwrap()
-            .to_buffer()
+            .to_buffer_with_info()
             .unwrap();
+        assert!(!data.is_empty());
+        assert_eq!(560, info.width);
+        assert_eq!(400, info.height);
+        assert_eq!(4, info.channels);
+        assert_similar!(
+            fixtures::expected(&format!("extend-2channel-{}.png", extend_to_string(*e))),
+            data,
+            None
+        );
     });
 
     //extend top with mirroring uses ordered read
-    Sharp::new_from_file(fixtures::inputJpg())
+    let (_, info) = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .extend(ExtendOptions {
             top: Some(1),
@@ -135,8 +186,10 @@ pub fn extend() {
             ..Default::default()
         }))
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(2725, info.width);
+    assert_eq!(2226, info.height);
 
     //multi-page extend uses ordered read
     let multi_page_tiff = Sharp::new_from_file_with_opts(
@@ -154,7 +207,7 @@ pub fn extend() {
     .to_buffer()
     .unwrap();
 
-    Sharp::new_from_buffer_with_opts(
+    let (_, info) = Sharp::new_from_buffer_with_opts(
         multi_page_tiff,
         SharpOptions {
             pages: Some(-1),
@@ -173,11 +226,13 @@ pub fn extend() {
         ..Default::default()
     }))
     .unwrap()
-    .to_buffer()
+    .to_buffer_with_info()
     .unwrap();
+    assert_eq!(8, info.width);
+    assert_eq!(1470, info.height);
 
     //should add alpha channel before extending with a transparent Background
-    Sharp::new_from_file(fixtures::inputJpgWithLandscapeExif1())
+    let (data, info) = Sharp::new_from_file(fixtures::inputJpgWithLandscapeExif1())
         .unwrap()
         .extend(ExtendOptions {
             bottom: Some(10),
@@ -188,31 +243,27 @@ pub fn extend() {
         .unwrap()
         .to_format(sharp::output::FormatEnum::Png, None)
         .unwrap()
-        .to_buffer()
+        .to_buffer_with_info()
         .unwrap();
+    assert_eq!(610, info.width);
+    assert_eq!(460, info.height);
+    assert_similar!(fixtures::expected("addAlphaChanelBeforeExtend.png"), data, None);
 
     //Premultiply background when compositing
-    Sharp::new(SharpOptions {
-        create: Some(Create {
+    let buf = Sharp::new(Inputs::new().create(Create {
+        width: 1,
+        height: 1,
+        channels: 4,
+        background: Colour::new(255, 255, 255, 0.0),
+        ..Default::default()
+    }))
+    .unwrap()
+    .composite(&[OverlayOptions {
+        input: Input::create(Create {
             width: 1,
             height: 1,
             channels: 4,
-            background: Colour::from_hex(0xfff0),
-            ..Default::default()
-        }),
-        ..Default::default()
-    })
-    .unwrap()
-    .composite(&[OverlayOptions {
-        input: sharp::input::SharpInput::None(),
-        options: Some(SharpOptions {
-            create: Some(Create {
-                width: 1,
-                height: 1,
-                channels: 4,
-                background: Colour::new(191, 25, 66, 0.8),
-                ..Default::default()
-            }),
+            background: Colour::new(191, 25, 66, 0.8),
             ..Default::default()
         }),
         ..Default::default()
@@ -228,4 +279,16 @@ pub fn extend() {
     .unwrap()
     .to_buffer()
     .unwrap();
+    assert_eq!(buf, vec![191, 25, 66, 204, 191, 25, 66, 204]);
+}
+
+fn extend_to_string(extend: Extend) -> String {
+    match extend {
+        Extend::Background => "background",
+        Extend::Copy => "copy",
+        Extend::Mirror => "mirror",
+        Extend::Repeat => "repeat",
+        _ => "",
+    }
+    .to_string()
 }

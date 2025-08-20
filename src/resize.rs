@@ -14,9 +14,9 @@ pub enum Fit {
 #[derive(Debug, Clone, Default)]
 pub struct ResizeOptions {
     /** Alternative means of specifying width. If both are present self takes priority. */
-    pub width: i32,
+    pub width: Option<i32>,
     /** Alternative means of specifying height. If both are present self takes priority. */
-    pub height: i32,
+    pub height: Option<i32>,
     /** How the image should be resized to fit both provided dimensions, one of cover, contain, fill, inside or outside. (optional, default "cover") */
     pub fit: Option<Fit>,
     /** Position, gravity or strategy to use when fit is cover or contain. (optional, default "centre") */
@@ -95,6 +95,8 @@ pub enum Position {
     RightBottom = 6,
     LeftBottom = 7,
     LeftTop = 8,
+    Entropy = 16,
+    Attention = 17,
 }
 
 impl Sharp {
@@ -222,8 +224,8 @@ impl Sharp {
      */
     pub fn resize(self, width: i32, height: i32) -> Result<Self, String> {
         let options = ResizeOptions {
-            width,
-            height,
+            width: Some(width),
+            height: Some(height),
             ..Default::default()
         };
         self.resize_(options)
@@ -238,9 +240,7 @@ impl Sharp {
     }
 
     fn is_rotation_expected(&self) -> bool {
-        (self.options.angle % 360) != 0
-            || self.options.input.auto_orient
-            || self.options.rotation_angle != 0.0
+        (self.options.angle % 360) != 0 || self.options.rotation_angle != 0.0
     }
 
     fn resize_(mut self, options: ResizeOptions) -> Result<Self, String> {
@@ -252,17 +252,21 @@ impl Sharp {
         }
 
         // Width
-        if options.width > 0 {
-            self.options.width = options.width;
-        } else {
-            return Err(InvalidParameterError!("width", "positive integer", width));
+        if let Some(width) = options.width {
+            if width > 0 {
+                self.options.width = width;
+            } else {
+                return Err(InvalidParameterError!("width", "positive integer", width));
+            }
         }
 
         // Height
-        if options.height > 0 {
-            self.options.height = options.height;
-        } else {
-            return Err(InvalidParameterError!("height", "positive integer", height));
+        if let Some(height) = options.height {
+            if height > 0 {
+                self.options.height = height;
+            } else {
+                return Err(InvalidParameterError!("height", "positive integer", height));
+            }
         }
 
         // Fit
@@ -314,7 +318,7 @@ impl Sharp {
         }
 
         if self.is_rotation_expected() && self.is_resize_expected() {
-            self.options.rotate_before_pre_extract = true;
+            self.options.rotate_before = true;
         }
         Ok(self)
     }
@@ -444,8 +448,13 @@ impl Sharp {
             && !self.is_resize_expected()
             && (self.options.width_pre == -1 || self.options.width_post == -1)
         {
-            self.options.rotate_before_pre_extract = true;
+            self.options.rotate_before = true;
         }
+
+        if self.options.input.auto_orient {
+            self.options.orient_before = true;
+        }
+
         Ok(self)
     }
 
@@ -515,7 +524,7 @@ impl Sharp {
             }
         }
         if self.is_rotation_expected() {
-            self.options.rotate_before_pre_extract = true;
+            self.options.rotate_before = true;
         }
 
         Ok(self)

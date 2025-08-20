@@ -1,6 +1,6 @@
 use crate::{
     in_range,
-    input::{create_input_descriptor, SharpInput, SharpOptions},
+    input::{create_input_descriptor, Input, SharpInput, SharpOptions},
     InvalidParameterError, Sharp,
 };
 use rs_vips::ops::OperationBoolean;
@@ -110,23 +110,20 @@ impl Sharp {
      */
     pub fn join_channel(
         mut self,
-        images: &[SharpInput],
+        images: &[Input],
         options: Option<SharpOptions>,
     ) -> Result<Self, String> {
         if images.is_empty() && options.is_none() {
             return Ok(self);
         }
 
-        let images = if images.is_empty() {
-            &[SharpInput::None()]
-        } else {
-            images
-        };
-
         for image in images {
-            self.options
-                .join_channel_in
-                .push(create_input_descriptor(image.clone(), options.clone())?);
+            let descriptor = create_input_descriptor(
+                SharpInput::Single(image.inner.clone()),
+                options.clone(),
+                &mut self.options,
+            )?;
+            self.options.join_channel_in.push(descriptor);
         }
 
         Ok(self)
