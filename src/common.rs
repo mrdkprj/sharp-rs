@@ -399,7 +399,7 @@ pub(crate) fn image_type_supports_unlimited(image_type: &ImageType) -> bool {
   Does this image have an embedded profile?
 */
 pub(crate) fn has_profile(image: &VipsImage) -> bool {
-    unsafe { image.get_typeof(VIPS_META_ICC_NAME) == vips_blob_get_type() }
+    unsafe { image.get_typeof(VIPS_META_ICC_NAME).unwrap() == vips_blob_get_type() }
 }
 
 /*
@@ -424,7 +424,7 @@ pub(crate) fn get_profile(image: &VipsImage) -> Option<Vec<u8>> {
 pub(crate) fn set_profile(image: VipsImage, icc: Option<Vec<u8>>) -> Result<VipsImage> {
     if let Some(icc) = icc {
         let image = image.copy()?;
-        image.set_blob(VIPS_META_ICC_NAME, &icc);
+        image.set_blob(VIPS_META_ICC_NAME, &icc)?;
         return Ok(image);
     }
     Ok(image)
@@ -467,7 +467,7 @@ pub(crate) fn remove_exif(image: VipsImage) -> VipsImage {
     }
 
     for name in field_names.iter() {
-        image.remove(name.as_bytes());
+        image.remove(name).unwrap();
     }
     image
 }
@@ -477,7 +477,7 @@ pub(crate) fn remove_exif(image: VipsImage) -> VipsImage {
 */
 pub(crate) fn exif_orientation(image: &VipsImage) -> i32 {
     let mut orientation = 0;
-    if image.get_typeof(VIPS_META_ORIENTATION) != 0 {
+    if image.get_typeof(VIPS_META_ORIENTATION).unwrap() != 0 {
         orientation = image.get_int(VIPS_META_ORIENTATION).unwrap();
     }
     orientation
@@ -488,7 +488,7 @@ pub(crate) fn exif_orientation(image: &VipsImage) -> i32 {
 */
 pub(crate) fn set_exif_orientation(image: VipsImage, orientation: i32) -> Result<VipsImage> {
     let image = image.copy()?;
-    image.set_int(VIPS_META_ORIENTATION, orientation);
+    image.set_int(VIPS_META_ORIENTATION, orientation)?;
     Ok(image)
 }
 
@@ -497,8 +497,8 @@ pub(crate) fn set_exif_orientation(image: VipsImage, orientation: i32) -> Result
 */
 pub(crate) fn remove_exif_orientation(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
-    image.remove(VIPS_META_ORIENTATION);
-    image.remove("exif-ifd0-Orientation");
+    image.remove(VIPS_META_ORIENTATION)?;
+    image.remove("exif-ifd0-Orientation")?;
     Ok(image)
 }
 
@@ -518,7 +518,7 @@ pub(crate) fn set_animation_properties(
     // Only set page-height if we have more than one page, or this could
     // accidentally turn into an animated image later.
     if n_pages > 1 {
-        copied_image.set_int(VIPS_META_PAGE_HEIGHT, page_height);
+        copied_image.set_int(VIPS_META_PAGE_HEIGHT, page_height)?;
     }
     if has_delay {
         let mut delay = delay.to_vec();
@@ -526,7 +526,7 @@ pub(crate) fn set_animation_properties(
             // We have just one delay, repeat that value for all frames.
             delay.extend(std::iter::repeat(delay[0]).take((n_pages - 1) as usize));
         }
-        copied_image.set_array_int("delay", delay.as_slice());
+        copied_image.set_array_int("delay", &delay)?;
     }
     let loop_value = if n_pages == 1 && !has_delay && loop_ == -1 {
         1
@@ -534,7 +534,7 @@ pub(crate) fn set_animation_properties(
         loop_
     };
     if loop_value != -1 {
-        copied_image.set_int("loop", loop_value);
+        copied_image.set_int("loop", loop_value)?;
     }
 
     Ok(copied_image)
@@ -545,9 +545,9 @@ pub(crate) fn set_animation_properties(
 */
 pub(crate) fn remove_animation_properties(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
-    image.remove(VIPS_META_PAGE_HEIGHT);
-    image.remove("delay");
-    image.remove("loop");
+    image.remove(VIPS_META_PAGE_HEIGHT)?;
+    image.remove("delay")?;
+    image.remove("loop")?;
 
     Ok(image)
 }
@@ -557,7 +557,7 @@ pub(crate) fn remove_animation_properties(image: VipsImage) -> Result<VipsImage>
 */
 pub(crate) fn remove_gif_palette(image: VipsImage) -> Result<VipsImage> {
     let image = image.copy()?;
-    image.remove("gif-palette");
+    image.remove("gif-palette")?;
     Ok(image)
 }
 
@@ -581,14 +581,17 @@ pub(crate) fn get_density(image: &VipsImage) -> i32 {
 */
 pub(crate) fn set_density(image: VipsImage, density: f64) -> Result<VipsImage> {
     let pixels_per_mm = density / 25.4;
-    image.copy_with_opts(VOption::new().set("xres", pixels_per_mm).set("name", pixels_per_mm))
+    let copy = image.copy()?;
+    unsafe { (*copy.as_mut_ptr()).Xres = pixels_per_mm };
+    unsafe { (*copy.as_mut_ptr()).Yres = pixels_per_mm };
+    Ok(copy)
 }
 
 /*
   Check the proposed format supports the current dimensions.
 */
 pub(crate) fn assert_image_type_dimensions(image: &VipsImage, image_type: ImageType) -> Result<()> {
-    let height = if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
+    let height = if image.get_typeof(VIPS_META_PAGE_HEIGHT).unwrap() == get_g_type(G_TYPE_INT) {
         image.get_int(VIPS_META_PAGE_HEIGHT)?
     } else {
         image.get_height()
@@ -647,7 +650,7 @@ pub(crate) fn set_timeout(image: &VipsImage, seconds: u32) {
                     0,
                 );
 
-                image.image_set_progress(true);
+                image.set_progress(true);
             }
         }
     }
@@ -840,12 +843,11 @@ pub(crate) fn get_rgba_as_colourspace(
         return Ok(rgba);
     }
     let pixel = VipsImage::new_matrix(1, 1)?;
-    pixel.set_int("bands", bands as _);
+    pixel.set_int("bands", bands as _)?;
     let pixel = VipsImage::new_from_image(&pixel, &rgba)?.colourspace_with_opts(
         interpretation,
         VOption::new().set("source_space", Interpretation::Srgb as i32),
     )?;
-
     if should_premultiply {
         let pixel = pixel.premultiply()?;
         pixel.getpoint(0, 0)
@@ -877,7 +879,7 @@ pub(crate) fn apply_alpha(
         vec![multiplier * (0.2126 * colour[0] + 0.7152 * colour[1] + 0.0722 * colour[2])]
     };
     // Add alpha channel(s) to alphaColour colour
-    if colour[3] < 255.0 || image.image_hasalpha() {
+    if colour[3] < 255.0 || image.hasalpha() {
         let extra_bands = if image.get_bands() > 4 {
             image.get_bands() - 3
         } else {
@@ -890,7 +892,7 @@ pub(crate) fn apply_alpha(
         get_rgba_as_colourspace(alpha_colour, image.get_interpretation()?, should_premultiply)?;
 
     // Add non-transparent alpha channel, if required
-    if colour[3] < 255.0 && !image.image_hasalpha() {
+    if colour[3] < 255.0 && !image.hasalpha() {
         let image = image.bandjoin_const(&[255.0 * multiplier])?;
         Ok((image, alpha_colour))
     } else {
@@ -903,7 +905,7 @@ pub(crate) fn apply_alpha(
 */
 pub(crate) fn remove_alpha(image: VipsImage) -> Result<VipsImage> {
     let mut image = image.copy()?;
-    while image.get_bands() > 1 && image.image_hasalpha() {
+    while image.get_bands() > 1 && image.hasalpha() {
         image = image.extract_band_with_opts(0, VOption::new().set("n", image.get_bands() - 1))?;
     }
     Ok(image)
@@ -913,7 +915,7 @@ pub(crate) fn remove_alpha(image: VipsImage) -> Result<VipsImage> {
   Ensures alpha channel, if missing.
 */
 pub(crate) fn ensure_alpha(image: VipsImage, value: f64) -> Result<VipsImage> {
-    if !image.image_hasalpha() {
+    if !image.hasalpha() {
         let interpretation = image.get_interpretation()?;
         let max_alpha = unsafe { vips_interpretation_max_alpha(interpretation as _) };
         image.bandjoin_const(&[value * max_alpha])
@@ -998,8 +1000,8 @@ pub(crate) fn resolve_shrink(
 */
 pub(crate) fn stay_sequential(image: VipsImage, condition: bool) -> Result<VipsImage> {
     if unsafe { vips_image_is_sequential(image.as_mut_ptr()) > 0 } && condition {
-        let copied_image = VipsImage::image_copy_memory(image)?.copy()?;
-        copied_image.remove(VIPS_META_SEQUENTIAL);
+        let copied_image = VipsImage::copy_memory(image)?.copy()?;
+        copied_image.remove(VIPS_META_SEQUENTIAL)?;
         Ok(copied_image)
     } else {
         Ok(image)

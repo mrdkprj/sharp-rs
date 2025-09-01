@@ -280,6 +280,8 @@ pub fn extend() {
     .to_buffer()
     .unwrap();
     assert_eq!(buf, vec![191, 25, 66, 204, 191, 25, 66, 204]);
+
+    rs_vips::Vips::shutdown();
 }
 
 fn extend_to_string(extend: Extend) -> String {

@@ -871,4 +871,6 @@ fn rotate() {
     let metadata = Sharp::new_from_buffer(data).unwrap().metadata().unwrap();
     assert_eq!(212, metadata.width);
     assert_eq!(212, metadata.height);
+
+    rs_vips::Vips::shutdown();
 }

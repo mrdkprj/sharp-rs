@@ -198,4 +198,7 @@ pub fn modulate() {
             .unwrap();
         assert_max_colour_distance!(actual, expected, 3.0);
     });
+
+    fixtures::clean_up();
+    rs_vips::Vips::shutdown();
 }

@@ -19,7 +19,8 @@ use crate::{
 use rs_vips::{
     bindings::{
         VipsForeignKeep_VIPS_FOREIGN_KEEP_EXIF, VipsForeignKeep_VIPS_FOREIGN_KEEP_ICC,
-        VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT,
+        VipsForeignKeep_VIPS_FOREIGN_KEEP_XMP, VIPS_META_N_PAGES, VIPS_META_PAGE_HEIGHT,
+        VIPS_META_XMP_NAME,
     },
     error::Error::OperationError,
     ops::{
@@ -225,6 +226,7 @@ pub(crate) struct PipelineBaton {
     pub(crate) with_icc_profile: String,
     pub(crate) with_exif: HashMap<String, String>,
     pub(crate) with_exif_merge: bool,
+    pub(crate) with_xmp: String,
     pub(crate) timeout_seconds: u32,
     pub(crate) conv_kernel: Vec<f64>,
     pub(crate) conv_kernel_width: i32,
@@ -397,6 +399,7 @@ impl Default for PipelineBaton {
             with_metadata_orientation: -1,
             with_metadata_density: 0.0,
             with_exif_merge: true,
+            with_xmp: String::new(),
             timeout_seconds: 0,
             conv_kernel_width: 0,
             conv_kernel_height: 0,
@@ -640,14 +643,14 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
         for join in &baton.join {
             let (image, _) = open_input(join)?;
             let image = ensure_colourspace(image, baton.colourspace_pipeline)?;
-            has_alpha |= image.image_hasalpha();
+            has_alpha |= image.hasalpha();
             images.push(image);
         }
         if has_alpha {
             images = images
                 .into_iter()
                 .map(|img| {
-                    if !img.image_hasalpha() {
+                    if !img.hasalpha() {
                         ensure_alpha(img, 1.0)
                     } else {
                         Ok(img)
@@ -671,8 +674,8 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
 
         if baton.input.join_animated {
             let image = image.copy()?;
-            image.set_int(VIPS_META_N_PAGES, images.len() as _);
-            image.set_int(VIPS_META_PAGE_HEIGHT, image.get_height() / images.len() as i32);
+            image.set_int(VIPS_META_N_PAGES, images.len() as _)?;
+            image.set_int(VIPS_META_PAGE_HEIGHT, image.get_height() / images.len() as i32)?;
             (image, input_image_type)
         } else {
             (image, input_image_type)
@@ -685,7 +688,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     let mut n_pages = baton.input.pages;
     if n_pages == -1 {
         // Resolve the number of pages if we need to render until the end of the document
-        n_pages = if image.get_typeof(VIPS_META_N_PAGES) != 0 {
+        n_pages = if image.get_typeof(VIPS_META_N_PAGES)? != 0 {
             image.get_int(VIPS_META_N_PAGES)? - baton.input.page
         } else {
             1
@@ -756,7 +759,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
                 VOption::new().set("background", background.as_slice()),
             )?;
 
-            image = VipsImage::image_copy_memory(image)?;
+            image = VipsImage::copy_memory(image)?;
             baton.rotation_angle = 0.0;
         }
     }
@@ -1044,7 +1047,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     }
 
     // Flatten image to remove alpha channel
-    if baton.flatten && image.image_hasalpha() {
+    if baton.flatten && image.hasalpha() {
         image = flatten(image, &baton.flatten_background)?;
     }
 
@@ -1064,13 +1067,13 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     let should_sharpen = baton.sharpen_sigma != 0.0;
     let should_composite = !baton.composite.is_empty();
 
-    if should_composite && !image.image_hasalpha() {
+    if should_composite && !image.hasalpha() {
         image = ensure_alpha(image, 1.0)?;
     }
 
     let premultiply_format = image.get_format()?;
     let should_premultiply_alpha =
-        image.image_hasalpha() && (should_resize || should_blur || should_conv || should_sharpen);
+        image.hasalpha() && (should_resize || should_blur || should_conv || should_sharpen);
 
     if should_premultiply_alpha {
         image = image.premultiply()?.cast(premultiply_format)?;
@@ -1682,7 +1685,7 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     // Extract channel
     if baton.extract_channel > -1 {
         if baton.extract_channel >= image.get_bands() {
-            if baton.extract_channel == 3 && image.image_hasalpha() {
+            if baton.extract_channel == 3 && image.hasalpha() {
                 baton.extract_channel = image.get_bands() - 1;
             } else {
                 let mut error = baton.err.clone();
@@ -1753,8 +1756,16 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
             image = remove_exif(image);
         }
         for (name, value) in baton.with_exif.iter() {
-            image.set_string(name.as_bytes(), value);
+            image.set_string(name, value)?;
         }
+    }
+
+    // XMP buffer
+    if (baton.keep_metadata as u32 & VipsForeignKeep_VIPS_FOREIGN_KEEP_XMP != 0)
+        && !baton.with_xmp.is_empty()
+    {
+        image = image.copy()?;
+        image.set_blob(VIPS_META_XMP_NAME, baton.with_xmp.as_bytes())?;
     }
 
     // Number of channels used in output image
@@ -1765,554 +1776,564 @@ pub(crate) fn pipline(mut baton: PipelineBaton) -> Result<PipelineBaton> {
     image =
         set_animation_properties(image, n_pages, target_page_height, &baton.delay, baton.loop_)?;
 
-    if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
+    if image.get_typeof(VIPS_META_PAGE_HEIGHT)? == get_g_type(G_TYPE_INT) {
         baton.page_height_out = image.get_int(VIPS_META_PAGE_HEIGHT)?;
         baton.pages_out = image.get_int(VIPS_META_N_PAGES)?;
     }
 
-    write(image, input_image_type, baton)
+    if baton.file_out.is_empty() {
+        write_to_buffer(image, input_image_type, baton)
+    } else {
+        write_to_file(image, input_image_type, baton)
+    }
 }
 
-fn write(
+fn write_to_buffer(
     mut image: VipsImage,
     input_image_type: ImageType,
     mut baton: PipelineBaton,
 ) -> Result<PipelineBaton> {
-    // Output
+    // Buffer output
     set_timeout(&image, baton.timeout_seconds);
-    if baton.file_out.is_empty() {
-        // Buffer output
-        if baton.format_out == "jpeg"
-            || (baton.format_out == "input" && input_image_type == ImageType::Jpeg)
-        {
-            assert_image_type_dimensions(&image, ImageType::Jpeg)?;
-            let area = image.jpegsave_buffer_with_opts(
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.jpeg_quality)
-                    .set("interlace", baton.jpeg_progressive)
-                    .set(
-                        "subsample_mode",
-                        if baton.jpeg_chroma_subsampling == *"4:4:4" {
-                            ForeignSubsample::Off
-                        } else {
-                            ForeignSubsample::On
-                        } as i32,
-                    )
-                    .set("trellis_quant", baton.jpeg_trellis_quantisation)
-                    .set("quant_table", baton.jpeg_quantisation_table)
-                    .set("overshoot_deringing", baton.jpeg_overshoot_deringing)
-                    .set("optimize_scans", baton.jpeg_optimise_scans)
-                    .set("optimize_coding", baton.jpeg_optimise_coding),
-            )?;
 
-            baton.buffer_out = area;
-            baton.format_out = "jpeg".to_string();
-            if baton.colourspace == Interpretation::Cmyk {
-                baton.channels = std::cmp::min(baton.channels, 4);
-            } else {
-                baton.channels = std::cmp::min(baton.channels, 3);
-            }
-        } else if baton.format_out == "jp2"
-            || (baton.format_out == "input" && input_image_type == ImageType::JP2)
-        {
-            // Write JP2 to Buffer
-            assert_image_type_dimensions(&image, ImageType::JP2)?;
-            let area = image.jp2ksave_buffer_with_opts(
-                VOption::new()
-                    .set("Q", baton.jp2_quality)
-                    .set("lossless", baton.jp2_lossless)
-                    .set(
-                        "subsample_mode",
-                        if baton.jp2_chroma_subsampling == *"4:4:4" {
-                            ForeignSubsample::Off
-                        } else {
-                            ForeignSubsample::On
-                        } as i32,
-                    )
-                    .set("tile_height", baton.jp2_tile_height)
-                    .set("tile_width", baton.jp2_tile_width),
-            )?;
-
-            baton.buffer_out = area;
-            baton.format_out = "jp2".to_string();
-        } else if baton.format_out == "png"
-            || (baton.format_out == "input"
-                && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG))
-        {
-            // Write PNG to buffer
-            assert_image_type_dimensions(&image, ImageType::Png)?;
-            let area = image.pngsave_buffer_with_opts(
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("interlace", baton.png_progressive)
-                    .set("compression", baton.png_compression_level)
-                    .set(
-                        "filter",
-                        if baton.png_adaptive_filtering {
-                            ForeignPngFilter::All
-                        } else {
-                            ForeignPngFilter::None
-                        } as i32,
-                    )
-                    .set("palette", baton.png_palette)
-                    .set("Q", baton.png_quality)
-                    .set("effort", baton.png_effort)
-                    .set(
-                        "bitdepth",
-                        if is16_bit(image.get_interpretation()?) {
-                            16
-                        } else {
-                            baton.png_bitdepth
-                        },
-                    )
-                    .set("dither", baton.png_dither),
-            )?;
-
-            baton.buffer_out = area;
-            baton.format_out = "png".to_string();
-        } else if baton.format_out == "webp"
-            || (baton.format_out == "input" && input_image_type == ImageType::Webp)
-        {
-            // Write WEBP to buffer
-            assert_image_type_dimensions(&image, ImageType::Webp)?;
-            let area = image.webpsave_buffer_with_opts(
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.webp_quality)
-                    .set("lossless", baton.webp_lossless)
-                    .set("near_lossless", baton.webp_near_lossless)
-                    .set("smart_subsample", baton.webp_smart_subsample)
-                    .set("smart_deblock", baton.webp_smart_deblock)
-                    .set("preset", baton.webp_preset as i32)
-                    .set("effort", baton.webp_effort)
-                    .set("min_size", baton.webp_min_size)
-                    .set("mixed", baton.webp_mixed)
-                    .set("alpha_q", baton.webp_alpha_quality),
-            )?;
-            baton.buffer_out = area;
-            baton.format_out = "webp".to_string();
-        } else if baton.format_out == "gif"
-            || (baton.format_out == "input" && input_image_type == ImageType::GIF)
-        {
-            // Write GIF to buffer
-            assert_image_type_dimensions(&image, ImageType::GIF)?;
-            let area = image.gifsave_buffer_with_opts(
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("bitdepth", baton.gif_bitdepth)
-                    .set("effort", baton.gif_effort)
-                    .set("reuse", baton.gif_reuse)
-                    .set("interlace", baton.gif_progressive)
-                    .set("interframe_maxerror", baton.gif_inter_frame_max_error)
-                    .set("interpalette_maxerror", baton.gif_inter_palette_max_error)
-                    .set("dither", baton.gif_dither),
-            )?;
-            baton.buffer_out = area;
-            baton.format_out = "gif".to_string();
-        } else if baton.format_out == "tiff"
-            || (baton.format_out == "input" && input_image_type == ImageType::Tiff)
-        {
-            // Write TIFF to buffer
-            if baton.tiff_compression == ForeignTiffCompression::Jpeg {
-                assert_image_type_dimensions(&image, ImageType::Jpeg)?;
-                baton.channels = std::cmp::min(baton.channels, 3);
-            }
-            // Cast pixel values to float, if required
-            if baton.tiff_predictor == ForeignTiffPredictor::Float {
-                image = image.cast(BandFormat::Float)?;
-            }
-            let area = image.tiffsave_buffer_with_opts(
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.tiff_quality)
-                    .set("bitdepth", baton.tiff_bitdepth)
-                    .set("compression", baton.tiff_compression as i32)
-                    .set("miniswhite", baton.tiff_miniswhite)
-                    .set("predictor", baton.tiff_predictor as i32)
-                    .set("pyramid", baton.tiff_pyramid)
-                    .set("tile", baton.tiff_tile)
-                    .set("tile_height", baton.tiff_tile_height)
-                    .set("tile_width", baton.tiff_tile_width)
-                    .set("xres", baton.tiff_xres)
-                    .set("yres", baton.tiff_yres)
-                    .set("resunit", baton.tiff_resolution_unit as i32),
-            )?;
-            baton.buffer_out = area;
-            baton.format_out = "tiff".to_string();
-        } else if baton.format_out == "heif"
-            || (baton.format_out == "input" && input_image_type == ImageType::HEIF)
-        {
-            // Write HEIF to buffer
-            assert_image_type_dimensions(&image, ImageType::HEIF)?;
-            image = remove_animation_properties(image)?;
-            let area = image.heifsave_buffer_with_opts(
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.heif_quality)
-                    .set("compression", baton.heif_compression as i32)
-                    .set("effort", baton.heif_effort)
-                    .set("bitdepth", baton.heif_bitdepth)
-                    .set(
-                        "subsample_mode",
-                        if baton.heif_chroma_subsampling == *"4:4:4" {
-                            ForeignSubsample::Off
-                        } else {
-                            ForeignSubsample::On
-                        } as i32,
-                    )
-                    .set("lossless", baton.heif_lossless),
-            )?;
-            baton.buffer_out = area;
-            baton.format_out = "heif".to_string();
-        } else if baton.format_out == "dz" {
-            // Write DZ to buffer
-            baton.tile_container = ForeignDzContainer::Zip;
-            if !image.image_hasalpha() {
-                baton.tile_background.pop();
-            }
-            image = stay_sequential(image, baton.tile_angle != 0)?;
-            let suffix = build_dz_suffix(&baton);
-            let mut options = VOption::new()
+    if baton.format_out == "jpeg"
+        || (baton.format_out == "input" && input_image_type == ImageType::Jpeg)
+    {
+        assert_image_type_dimensions(&image, ImageType::Jpeg)?;
+        let area = image.jpegsave_buffer_with_opts(
+            VOption::new()
                 .set("keep", baton.keep_metadata)
-                .set("tile_size", baton.tile_size)
-                .set("overlap", baton.tile_overlap)
-                .set("container", baton.tile_container as i32)
-                .set("layout", baton.tile_layout as i32)
-                .set("suffix", &suffix)
-                .set("angle", calculate_angle_rotation(baton.tile_angle) as i32)
-                .set("background", baton.tile_background.as_slice())
-                .set("centre", baton.tile_centre)
-                .set("id", &baton.tile_id)
-                .set("skip_blanks", baton.tile_skip_blanks);
+                .set("Q", baton.jpeg_quality)
+                .set("interlace", baton.jpeg_progressive)
+                .set(
+                    "subsample_mode",
+                    if baton.jpeg_chroma_subsampling == *"4:4:4" {
+                        ForeignSubsample::Off
+                    } else {
+                        ForeignSubsample::On
+                    } as i32,
+                )
+                .set("trellis_quant", baton.jpeg_trellis_quantisation)
+                .set("quant_table", baton.jpeg_quantisation_table)
+                .set("overshoot_deringing", baton.jpeg_overshoot_deringing)
+                .set("optimize_scans", baton.jpeg_optimise_scans)
+                .set("optimize_coding", baton.jpeg_optimise_coding),
+        )?;
 
-            if baton.tile_depth < ForeignDzDepth::Last {
-                options.add("depth", baton.tile_depth as i32);
-            }
-            if !baton.tile_basename.is_empty() {
-                options.add("basename", &baton.tile_basename);
-            }
-            let area = image.dzsave_buffer_with_opts(options)?;
-            baton.buffer_out = area;
-            baton.format_out = "dz".to_string();
-        } else if baton.format_out == "jxl"
-            || (baton.format_out == "input" && input_image_type == ImageType::JXL)
-        {
-            // Write JXL to buffer
-            image = remove_animation_properties(image)?;
-            let area = image.jxlsave_buffer_with_opts(
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("distance", baton.jxl_distance)
-                    .set("tier", baton.jxl_decoding_tier)
-                    .set("effort", baton.jxl_effort)
-                    .set("lossless", baton.jxl_lossless),
-            )?;
-            baton.buffer_out = area;
-            baton.format_out = "jxl".to_string();
-        } else if baton.format_out == "raw"
-            || (baton.format_out == "input" && input_image_type == ImageType::RAW)
-        {
-            // Write raw, uncompressed image data to buffer
-            if baton.greyscale || image.get_interpretation()? == Interpretation::BW {
-                // Extract first band for greyscale image
-                image = image.extract_band(0)?;
-                baton.channels = 1;
-            }
-            if image.get_format()? != baton.raw_depth {
-                // Cast pixels to requested format
-                image = image.cast(baton.raw_depth)?;
-            }
-            // Get raw image data
-            let area = image.image_write_to_memory();
-            baton.buffer_out = area;
-            if baton.buffer_out.is_empty() {
-                baton.err.push_str("Could not allocate enough memory for raw output");
-                return Err(OperationError(baton.err.clone()));
-            }
-            baton.format_out = "raw".to_string();
+        baton.buffer_out = area;
+        baton.format_out = "jpeg".to_string();
+        if baton.colourspace == Interpretation::Cmyk {
+            baton.channels = std::cmp::min(baton.channels, 4);
         } else {
-            // Unsupported output format
-            baton.err.push_str("Unsupported output format ");
-            if baton.format_out == "input" {
-                baton.err.push_str("when trying to match input format of ");
-                baton.err.push_str(&image_type_id(input_image_type));
-            } else {
-                baton.err.push_str(&baton.format_out);
-            }
-            return Err(OperationError(baton.err.clone()));
-        }
-    } else {
-        // File output
-        let is_jpeg = is_jpeg(&baton.file_out);
-        let is_png = is_png(&baton.file_out);
-        let is_webp = is_webp(&baton.file_out);
-        let is_gif = is_gif(&baton.file_out);
-        let is_tiff = is_tiff(&baton.file_out);
-        let is_jp2 = is_jp2(&baton.file_out);
-        let is_heif = is_heif(&baton.file_out);
-        let is_jxl = is_jxl(&baton.file_out);
-        let is_dz = is_dz(&baton.file_out);
-        let is_dz_zip = is_dz_zip(&baton.file_out);
-        let is_v = is_v(&baton.file_out);
-        let might_match_input = baton.format_out == "input";
-        let will_match_input = might_match_input
-            && !(is_jpeg
-                || is_png
-                || is_webp
-                || is_gif
-                || is_tiff
-                || is_jp2
-                || is_heif
-                || is_dz
-                || is_dz_zip
-                || is_v);
-
-        if baton.format_out == "jpeg"
-            || (might_match_input && is_jpeg)
-            || (will_match_input && input_image_type == ImageType::Jpeg)
-        {
-            // Write JPEG to file
-            assert_image_type_dimensions(&image, ImageType::Jpeg)?;
-            image.jpegsave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.jpeg_quality)
-                    .set("interlace", baton.jpeg_progressive)
-                    .set(
-                        "subsample_mode",
-                        if baton.jpeg_chroma_subsampling == "4:4:4" {
-                            ForeignSubsample::Off
-                        } else {
-                            ForeignSubsample::On
-                        } as i32,
-                    )
-                    .set("trellis_quant", baton.jpeg_trellis_quantisation)
-                    .set("quant_table", baton.jpeg_quantisation_table)
-                    .set("overshoot_deringing", baton.jpeg_overshoot_deringing)
-                    .set("optimize_scans", baton.jpeg_optimise_scans)
-                    .set("optimize_coding", baton.jpeg_optimise_coding),
-            )?;
-            baton.format_out = "jpeg".to_string();
             baton.channels = std::cmp::min(baton.channels, 3);
-        } else if baton.format_out == "jp2"
-            || (might_match_input && is_jp2)
-            || (will_match_input && input_image_type == ImageType::JP2)
-        {
-            // Write JP2 to file
-            assert_image_type_dimensions(&image, ImageType::JP2)?;
-            image.jp2ksave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("Q", baton.jp2_quality)
-                    .set("lossless", baton.jp2_lossless)
-                    .set(
-                        "subsample_mode",
-                        if baton.jp2_chroma_subsampling == "4:4:4" {
-                            ForeignSubsample::Off
-                        } else {
-                            ForeignSubsample::On
-                        } as i32,
-                    )
-                    .set("tile_height", baton.jp2_tile_height)
-                    .set("tile_width", baton.jp2_tile_width),
-            )?;
-            baton.format_out = "jp2".to_string();
-        } else if baton.format_out == "png"
-            || (might_match_input && is_png)
-            || (will_match_input
-                && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG))
-        {
-            // Write PNG to file
-            assert_image_type_dimensions(&image, ImageType::Png)?;
-            image.pngsave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("interlace", baton.png_progressive)
-                    .set("compression", baton.png_compression_level)
-                    .set(
-                        "filter",
-                        if baton.png_adaptive_filtering {
-                            ForeignPngFilter::All
-                        } else {
-                            ForeignPngFilter::None
-                        } as i32,
-                    )
-                    .set("palette", baton.png_palette)
-                    .set("Q", baton.png_quality)
-                    .set(
-                        "bitdepth",
-                        if is16_bit(image.get_interpretation()?) {
-                            16
-                        } else {
-                            baton.png_bitdepth
-                        },
-                    )
-                    .set("effort", baton.png_effort)
-                    .set("dither", baton.png_dither),
-            )?;
-            baton.format_out = "png".to_string();
-        } else if baton.format_out == "webp"
-            || (might_match_input && is_webp)
-            || (will_match_input && input_image_type == ImageType::Webp)
-        {
-            // Write WEBP to file
-            assert_image_type_dimensions(&image, ImageType::Webp)?;
-            image.webpsave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.webp_quality)
-                    .set("lossless", baton.webp_lossless)
-                    .set("near_lossless", baton.webp_near_lossless)
-                    .set("smart_subsample", baton.webp_smart_subsample)
-                    .set("smart_deblock", baton.webp_smart_deblock)
-                    .set("preset", baton.webp_preset as i32)
-                    .set("effort", baton.webp_effort)
-                    .set("min_size", baton.webp_min_size)
-                    .set("mixed", baton.webp_mixed)
-                    .set("alpha_q", baton.webp_alpha_quality),
-            )?;
-            baton.format_out = "webp".to_string();
-        } else if baton.format_out == "gif"
-            || (might_match_input && is_gif)
-            || (will_match_input && input_image_type == ImageType::GIF)
-        {
-            // Write GIF to file
-            assert_image_type_dimensions(&image, ImageType::GIF)?;
-            image.gifsave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("bitdepth", baton.gif_bitdepth)
-                    .set("effort", baton.gif_effort)
-                    .set("reuse", baton.gif_reuse)
-                    .set("interlace", baton.gif_progressive)
-                    .set("dither", baton.gif_dither),
-            )?;
-            baton.format_out = "gif".to_string();
-        } else if baton.format_out == "tiff"
-            || (might_match_input && is_tiff)
-            || (will_match_input && input_image_type == ImageType::Tiff)
-        {
-            // Write TIFF to file
-            if baton.tiff_compression == ForeignTiffCompression::Jpeg {
-                assert_image_type_dimensions(&image, ImageType::Jpeg)?;
-                baton.channels = std::cmp::min(baton.channels, 3);
-            }
-            // Cast pixel values to float, if required
-            if baton.tiff_predictor == ForeignTiffPredictor::Float {
-                image = image.cast(BandFormat::Float)?;
-            }
-            image.tiffsave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.tiff_quality)
-                    .set("bitdepth", baton.tiff_bitdepth)
-                    .set("compression", baton.tiff_compression as i32)
-                    .set("miniswhite", baton.tiff_miniswhite)
-                    .set("predictor", baton.tiff_predictor as i32)
-                    .set("pyramid", baton.tiff_pyramid)
-                    .set("tile", baton.tiff_tile)
-                    .set("tile_height", baton.tiff_tile_height)
-                    .set("tile_width", baton.tiff_tile_width)
-                    .set("xres", baton.tiff_xres)
-                    .set("yres", baton.tiff_yres)
-                    .set("resunit", baton.tiff_resolution_unit as i32),
-            )?;
-            baton.format_out = "tiff".to_string();
-        } else if baton.format_out == "heif"
-            || (might_match_input && is_heif)
-            || (will_match_input && input_image_type == ImageType::HEIF)
-        {
-            // Write HEIF to file
-            assert_image_type_dimensions(&image, ImageType::HEIF)?;
-            image = remove_animation_properties(image)?;
-            image.heifsave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("Q", baton.heif_quality)
-                    .set("compression", baton.heif_compression as i32)
-                    .set("effort", baton.heif_effort)
-                    .set("bitdepth", baton.heif_bitdepth)
-                    .set(
-                        "subsample_mode",
-                        if baton.heif_chroma_subsampling == *"4:4:4" {
-                            ForeignSubsample::Off
-                        } else {
-                            ForeignSubsample::On
-                        } as i32,
-                    )
-                    .set("lossless", baton.heif_lossless),
-            )?;
-            baton.format_out = "heif".to_string();
-        } else if baton.format_out == "jxl"
-            || (might_match_input && is_jxl)
-            || (will_match_input && input_image_type == ImageType::JXL)
-        {
-            // Write JXL to file
-            image = remove_animation_properties(image)?;
-            image.jxlsave_with_opts(
-                &baton.file_out,
-                VOption::new()
-                    .set("keep", baton.keep_metadata)
-                    .set("distance", baton.jxl_distance)
-                    .set("tier", baton.jxl_decoding_tier)
-                    .set("effort", baton.jxl_effort)
-                    .set("lossless", baton.jxl_lossless),
-            )?;
-            baton.format_out = "jxl".to_string();
-        } else if baton.format_out == "dz" || is_dz || is_dz_zip {
-            // Write DZ to file
-            if is_dz_zip {
-                baton.tile_container = ForeignDzContainer::Zip;
-            }
-            if !image.image_hasalpha() {
-                baton.tile_background.pop();
-            }
-            image = stay_sequential(image, baton.tile_angle != 0)?;
-            let suffix = build_dz_suffix(&baton);
-            let mut options = VOption::new()
-                .set("keep", baton.keep_metadata)
-                .set("tile_size", baton.tile_size)
-                .set("overlap", baton.tile_overlap)
-                .set("container", baton.tile_container as i32)
-                .set("layout", baton.tile_layout as i32)
-                .set("suffix", &suffix)
-                .set("angle", calculate_angle_rotation(baton.tile_angle) as i32)
-                .set("background", baton.tile_background.as_slice())
-                .set("centre", baton.tile_centre)
-                .set("id", &baton.tile_id)
-                .set("skip_blanks", baton.tile_skip_blanks);
+        }
+    } else if baton.format_out == "jp2"
+        || (baton.format_out == "input" && input_image_type == ImageType::JP2)
+    {
+        // Write JP2 to Buffer
+        assert_image_type_dimensions(&image, ImageType::JP2)?;
+        let area = image.jp2ksave_buffer_with_opts(
+            VOption::new()
+                .set("Q", baton.jp2_quality)
+                .set("lossless", baton.jp2_lossless)
+                .set(
+                    "subsample_mode",
+                    if baton.jp2_chroma_subsampling == *"4:4:4" {
+                        ForeignSubsample::Off
+                    } else {
+                        ForeignSubsample::On
+                    } as i32,
+                )
+                .set("tile_height", baton.jp2_tile_height)
+                .set("tile_width", baton.jp2_tile_width),
+        )?;
 
-            if baton.tile_depth < ForeignDzDepth::Last {
-                options.add("depth", baton.tile_depth as i32);
-            }
-            if !baton.tile_basename.is_empty() {
-                options.add("basename", &baton.tile_basename);
-            }
-            image.dzsave_with_opts(&baton.file_out, options)?;
-            baton.format_out = "dz".to_string();
-        } else if baton.format_out == "v"
-            || (might_match_input && is_v)
-            || (will_match_input && input_image_type == ImageType::VIPS)
-        {
-            // Write V to file
-            image.vipssave_with_opts(
-                &baton.file_out,
-                VOption::new().set("keep", baton.keep_metadata),
-            )?;
-            baton.format_out = "v".to_string();
-        } else {
-            // Unsupported output format
-            baton.err.push_str(&format!("Unsupported output format {}", baton.file_out));
+        baton.buffer_out = area;
+        baton.format_out = "jp2".to_string();
+    } else if baton.format_out == "png"
+        || (baton.format_out == "input"
+            && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG))
+    {
+        // Write PNG to buffer
+        assert_image_type_dimensions(&image, ImageType::Png)?;
+        let area = image.pngsave_buffer_with_opts(
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("interlace", baton.png_progressive)
+                .set("compression", baton.png_compression_level)
+                .set(
+                    "filter",
+                    if baton.png_adaptive_filtering {
+                        ForeignPngFilter::All
+                    } else {
+                        ForeignPngFilter::None
+                    } as i32,
+                )
+                .set("palette", baton.png_palette)
+                .set("Q", baton.png_quality)
+                .set("effort", baton.png_effort)
+                .set(
+                    "bitdepth",
+                    if is16_bit(image.get_interpretation()?) {
+                        16
+                    } else {
+                        baton.png_bitdepth
+                    },
+                )
+                .set("dither", baton.png_dither),
+        )?;
+
+        baton.buffer_out = area;
+        baton.format_out = "png".to_string();
+    } else if baton.format_out == "webp"
+        || (baton.format_out == "input" && input_image_type == ImageType::Webp)
+    {
+        // Write WEBP to buffer
+        assert_image_type_dimensions(&image, ImageType::Webp)?;
+        let area = image.webpsave_buffer_with_opts(
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("Q", baton.webp_quality)
+                .set("lossless", baton.webp_lossless)
+                .set("near_lossless", baton.webp_near_lossless)
+                .set("smart_subsample", baton.webp_smart_subsample)
+                .set("smart_deblock", baton.webp_smart_deblock)
+                .set("preset", baton.webp_preset as i32)
+                .set("effort", baton.webp_effort)
+                .set("min_size", baton.webp_min_size)
+                .set("mixed", baton.webp_mixed)
+                .set("alpha_q", baton.webp_alpha_quality),
+        )?;
+        baton.buffer_out = area;
+        baton.format_out = "webp".to_string();
+    } else if baton.format_out == "gif"
+        || (baton.format_out == "input" && input_image_type == ImageType::GIF)
+    {
+        // Write GIF to buffer
+        assert_image_type_dimensions(&image, ImageType::GIF)?;
+        let area = image.gifsave_buffer_with_opts(
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("bitdepth", baton.gif_bitdepth)
+                .set("effort", baton.gif_effort)
+                .set("reuse", baton.gif_reuse)
+                .set("interlace", baton.gif_progressive)
+                .set("interframe_maxerror", baton.gif_inter_frame_max_error)
+                .set("interpalette_maxerror", baton.gif_inter_palette_max_error)
+                .set("dither", baton.gif_dither),
+        )?;
+        baton.buffer_out = area;
+        baton.format_out = "gif".to_string();
+    } else if baton.format_out == "tiff"
+        || (baton.format_out == "input" && input_image_type == ImageType::Tiff)
+    {
+        // Write TIFF to buffer
+        if baton.tiff_compression == ForeignTiffCompression::Jpeg {
+            assert_image_type_dimensions(&image, ImageType::Jpeg)?;
+            baton.channels = std::cmp::min(baton.channels, 3);
+        }
+        // Cast pixel values to float, if required
+        if baton.tiff_predictor == ForeignTiffPredictor::Float {
+            image = image.cast(BandFormat::Float)?;
+        }
+        let area = image.tiffsave_buffer_with_opts(
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("Q", baton.tiff_quality)
+                .set("bitdepth", baton.tiff_bitdepth)
+                .set("compression", baton.tiff_compression as i32)
+                .set("miniswhite", baton.tiff_miniswhite)
+                .set("predictor", baton.tiff_predictor as i32)
+                .set("pyramid", baton.tiff_pyramid)
+                .set("tile", baton.tiff_tile)
+                .set("tile_height", baton.tiff_tile_height)
+                .set("tile_width", baton.tiff_tile_width)
+                .set("xres", baton.tiff_xres)
+                .set("yres", baton.tiff_yres)
+                .set("resunit", baton.tiff_resolution_unit as i32),
+        )?;
+        baton.buffer_out = area;
+        baton.format_out = "tiff".to_string();
+    } else if baton.format_out == "heif"
+        || (baton.format_out == "input" && input_image_type == ImageType::HEIF)
+    {
+        // Write HEIF to buffer
+        assert_image_type_dimensions(&image, ImageType::HEIF)?;
+        image = remove_animation_properties(image)?;
+        let area = image.heifsave_buffer_with_opts(
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("Q", baton.heif_quality)
+                .set("compression", baton.heif_compression as i32)
+                .set("effort", baton.heif_effort)
+                .set("bitdepth", baton.heif_bitdepth)
+                .set(
+                    "subsample_mode",
+                    if baton.heif_chroma_subsampling == *"4:4:4" {
+                        ForeignSubsample::Off
+                    } else {
+                        ForeignSubsample::On
+                    } as i32,
+                )
+                .set("lossless", baton.heif_lossless),
+        )?;
+        baton.buffer_out = area;
+        baton.format_out = "heif".to_string();
+    } else if baton.format_out == "dz" {
+        // Write DZ to buffer
+        baton.tile_container = ForeignDzContainer::Zip;
+        if !image.hasalpha() {
+            baton.tile_background.pop();
+        }
+        image = stay_sequential(image, baton.tile_angle != 0)?;
+        let suffix = build_dz_suffix(&baton);
+        let mut options = VOption::new()
+            .set("keep", baton.keep_metadata)
+            .set("tile_size", baton.tile_size)
+            .set("overlap", baton.tile_overlap)
+            .set("container", baton.tile_container as i32)
+            .set("layout", baton.tile_layout as i32)
+            .set("suffix", &suffix)
+            .set("angle", calculate_angle_rotation(baton.tile_angle) as i32)
+            .set("background", baton.tile_background.as_slice())
+            .set("centre", baton.tile_centre)
+            .set("id", &baton.tile_id)
+            .set("skip_blanks", baton.tile_skip_blanks);
+
+        if baton.tile_depth < ForeignDzDepth::Last {
+            options.add("depth", baton.tile_depth as i32);
+        }
+        if !baton.tile_basename.is_empty() {
+            options.add("basename", &baton.tile_basename);
+        }
+        let area = image.dzsave_buffer_with_opts(options)?;
+        baton.buffer_out = area;
+        baton.format_out = "dz".to_string();
+    } else if baton.format_out == "jxl"
+        || (baton.format_out == "input" && input_image_type == ImageType::JXL)
+    {
+        // Write JXL to buffer
+        image = remove_animation_properties(image)?;
+        let area = image.jxlsave_buffer_with_opts(
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("distance", baton.jxl_distance)
+                .set("tier", baton.jxl_decoding_tier)
+                .set("effort", baton.jxl_effort)
+                .set("lossless", baton.jxl_lossless),
+        )?;
+        baton.buffer_out = area;
+        baton.format_out = "jxl".to_string();
+    } else if baton.format_out == "raw"
+        || (baton.format_out == "input" && input_image_type == ImageType::RAW)
+    {
+        // Write raw, uncompressed image data to buffer
+        if baton.greyscale || image.get_interpretation()? == Interpretation::BW {
+            // Extract first band for greyscale image
+            image = image.extract_band(0)?;
+            baton.channels = 1;
+        }
+        if image.get_format()? != baton.raw_depth {
+            // Cast pixels to requested format
+            image = image.cast(baton.raw_depth)?;
+        }
+        // Get raw image data
+        let area = image.write_to_memory();
+        baton.buffer_out = area;
+        if baton.buffer_out.is_empty() {
+            baton.err.push_str("Could not allocate enough memory for raw output");
             return Err(OperationError(baton.err.clone()));
         }
-    };
+        baton.format_out = "raw".to_string();
+    } else {
+        // Unsupported output format
+        baton.err.push_str("Unsupported output format ");
+        if baton.format_out == "input" {
+            baton.err.push_str("when trying to match input format of ");
+            baton.err.push_str(&image_type_id(input_image_type));
+        } else {
+            baton.err.push_str(&baton.format_out);
+        }
+        return Err(OperationError(baton.err.clone()));
+    }
+
+    Ok(baton)
+}
+
+fn write_to_file(
+    mut image: VipsImage,
+    input_image_type: ImageType,
+    mut baton: PipelineBaton,
+) -> Result<PipelineBaton> {
+    // File output
+    set_timeout(&image, baton.timeout_seconds);
+
+    let is_jpeg = is_jpeg(&baton.file_out);
+    let is_png = is_png(&baton.file_out);
+    let is_webp = is_webp(&baton.file_out);
+    let is_gif = is_gif(&baton.file_out);
+    let is_tiff = is_tiff(&baton.file_out);
+    let is_jp2 = is_jp2(&baton.file_out);
+    let is_heif = is_heif(&baton.file_out);
+    let is_jxl = is_jxl(&baton.file_out);
+    let is_dz = is_dz(&baton.file_out);
+    let is_dz_zip = is_dz_zip(&baton.file_out);
+    let is_v = is_v(&baton.file_out);
+    let might_match_input = baton.format_out == "input";
+    let will_match_input = might_match_input
+        && !(is_jpeg
+            || is_png
+            || is_webp
+            || is_gif
+            || is_tiff
+            || is_jp2
+            || is_heif
+            || is_dz
+            || is_dz_zip
+            || is_v);
+
+    if baton.format_out == "jpeg"
+        || (might_match_input && is_jpeg)
+        || (will_match_input && input_image_type == ImageType::Jpeg)
+    {
+        // Write JPEG to file
+        assert_image_type_dimensions(&image, ImageType::Jpeg)?;
+        image.jpegsave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("Q", baton.jpeg_quality)
+                .set("interlace", baton.jpeg_progressive)
+                .set(
+                    "subsample_mode",
+                    if baton.jpeg_chroma_subsampling == "4:4:4" {
+                        ForeignSubsample::Off
+                    } else {
+                        ForeignSubsample::On
+                    } as i32,
+                )
+                .set("trellis_quant", baton.jpeg_trellis_quantisation)
+                .set("quant_table", baton.jpeg_quantisation_table)
+                .set("overshoot_deringing", baton.jpeg_overshoot_deringing)
+                .set("optimize_scans", baton.jpeg_optimise_scans)
+                .set("optimize_coding", baton.jpeg_optimise_coding),
+        )?;
+        baton.format_out = "jpeg".to_string();
+        baton.channels = std::cmp::min(baton.channels, 3);
+    } else if baton.format_out == "jp2"
+        || (might_match_input && is_jp2)
+        || (will_match_input && input_image_type == ImageType::JP2)
+    {
+        // Write JP2 to file
+        assert_image_type_dimensions(&image, ImageType::JP2)?;
+        image.jp2ksave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("Q", baton.jp2_quality)
+                .set("lossless", baton.jp2_lossless)
+                .set(
+                    "subsample_mode",
+                    if baton.jp2_chroma_subsampling == "4:4:4" {
+                        ForeignSubsample::Off
+                    } else {
+                        ForeignSubsample::On
+                    } as i32,
+                )
+                .set("tile_height", baton.jp2_tile_height)
+                .set("tile_width", baton.jp2_tile_width),
+        )?;
+        baton.format_out = "jp2".to_string();
+    } else if baton.format_out == "png"
+        || (might_match_input && is_png)
+        || (will_match_input
+            && (input_image_type == ImageType::Png || input_image_type == ImageType::SVG))
+    {
+        // Write PNG to file
+        assert_image_type_dimensions(&image, ImageType::Png)?;
+        image.pngsave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("interlace", baton.png_progressive)
+                .set("compression", baton.png_compression_level)
+                .set(
+                    "filter",
+                    if baton.png_adaptive_filtering {
+                        ForeignPngFilter::All
+                    } else {
+                        ForeignPngFilter::None
+                    } as i32,
+                )
+                .set("palette", baton.png_palette)
+                .set("Q", baton.png_quality)
+                .set(
+                    "bitdepth",
+                    if is16_bit(image.get_interpretation()?) {
+                        16
+                    } else {
+                        baton.png_bitdepth
+                    },
+                )
+                .set("effort", baton.png_effort)
+                .set("dither", baton.png_dither),
+        )?;
+        baton.format_out = "png".to_string();
+    } else if baton.format_out == "webp"
+        || (might_match_input && is_webp)
+        || (will_match_input && input_image_type == ImageType::Webp)
+    {
+        // Write WEBP to file
+        assert_image_type_dimensions(&image, ImageType::Webp)?;
+        image.webpsave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("Q", baton.webp_quality)
+                .set("lossless", baton.webp_lossless)
+                .set("near_lossless", baton.webp_near_lossless)
+                .set("smart_subsample", baton.webp_smart_subsample)
+                .set("smart_deblock", baton.webp_smart_deblock)
+                .set("preset", baton.webp_preset as i32)
+                .set("effort", baton.webp_effort)
+                .set("min_size", baton.webp_min_size)
+                .set("mixed", baton.webp_mixed)
+                .set("alpha_q", baton.webp_alpha_quality),
+        )?;
+        baton.format_out = "webp".to_string();
+    } else if baton.format_out == "gif"
+        || (might_match_input && is_gif)
+        || (will_match_input && input_image_type == ImageType::GIF)
+    {
+        // Write GIF to file
+        assert_image_type_dimensions(&image, ImageType::GIF)?;
+        image.gifsave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("bitdepth", baton.gif_bitdepth)
+                .set("effort", baton.gif_effort)
+                .set("reuse", baton.gif_reuse)
+                .set("interlace", baton.gif_progressive)
+                .set("dither", baton.gif_dither),
+        )?;
+        baton.format_out = "gif".to_string();
+    } else if baton.format_out == "tiff"
+        || (might_match_input && is_tiff)
+        || (will_match_input && input_image_type == ImageType::Tiff)
+    {
+        // Write TIFF to file
+        if baton.tiff_compression == ForeignTiffCompression::Jpeg {
+            assert_image_type_dimensions(&image, ImageType::Jpeg)?;
+            baton.channels = std::cmp::min(baton.channels, 3);
+        }
+        // Cast pixel values to float, if required
+        if baton.tiff_predictor == ForeignTiffPredictor::Float {
+            image = image.cast(BandFormat::Float)?;
+        }
+        image.tiffsave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("Q", baton.tiff_quality)
+                .set("bitdepth", baton.tiff_bitdepth)
+                .set("compression", baton.tiff_compression as i32)
+                .set("miniswhite", baton.tiff_miniswhite)
+                .set("predictor", baton.tiff_predictor as i32)
+                .set("pyramid", baton.tiff_pyramid)
+                .set("tile", baton.tiff_tile)
+                .set("tile_height", baton.tiff_tile_height)
+                .set("tile_width", baton.tiff_tile_width)
+                .set("xres", baton.tiff_xres)
+                .set("yres", baton.tiff_yres)
+                .set("resunit", baton.tiff_resolution_unit as i32),
+        )?;
+        baton.format_out = "tiff".to_string();
+    } else if baton.format_out == "heif"
+        || (might_match_input && is_heif)
+        || (will_match_input && input_image_type == ImageType::HEIF)
+    {
+        // Write HEIF to file
+        assert_image_type_dimensions(&image, ImageType::HEIF)?;
+        image = remove_animation_properties(image)?;
+        image.heifsave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("Q", baton.heif_quality)
+                .set("compression", baton.heif_compression as i32)
+                .set("effort", baton.heif_effort)
+                .set("bitdepth", baton.heif_bitdepth)
+                .set(
+                    "subsample_mode",
+                    if baton.heif_chroma_subsampling == *"4:4:4" {
+                        ForeignSubsample::Off
+                    } else {
+                        ForeignSubsample::On
+                    } as i32,
+                )
+                .set("lossless", baton.heif_lossless),
+        )?;
+        baton.format_out = "heif".to_string();
+    } else if baton.format_out == "jxl"
+        || (might_match_input && is_jxl)
+        || (will_match_input && input_image_type == ImageType::JXL)
+    {
+        // Write JXL to file
+        image = remove_animation_properties(image)?;
+        image.jxlsave_with_opts(
+            &baton.file_out,
+            VOption::new()
+                .set("keep", baton.keep_metadata)
+                .set("distance", baton.jxl_distance)
+                .set("tier", baton.jxl_decoding_tier)
+                .set("effort", baton.jxl_effort)
+                .set("lossless", baton.jxl_lossless),
+        )?;
+        baton.format_out = "jxl".to_string();
+    } else if baton.format_out == "dz" || is_dz || is_dz_zip {
+        // Write DZ to file
+        if is_dz_zip {
+            baton.tile_container = ForeignDzContainer::Zip;
+        }
+        if !image.hasalpha() {
+            baton.tile_background.pop();
+        }
+        image = stay_sequential(image, baton.tile_angle != 0)?;
+        let suffix = build_dz_suffix(&baton);
+        let mut options = VOption::new()
+            .set("keep", baton.keep_metadata)
+            .set("tile_size", baton.tile_size)
+            .set("overlap", baton.tile_overlap)
+            .set("container", baton.tile_container as i32)
+            .set("layout", baton.tile_layout as i32)
+            .set("suffix", &suffix)
+            .set("angle", calculate_angle_rotation(baton.tile_angle) as i32)
+            .set("background", baton.tile_background.as_slice())
+            .set("centre", baton.tile_centre)
+            .set("id", &baton.tile_id)
+            .set("skip_blanks", baton.tile_skip_blanks);
+
+        if baton.tile_depth < ForeignDzDepth::Last {
+            options.add("depth", baton.tile_depth as i32);
+        }
+        if !baton.tile_basename.is_empty() {
+            options.add("basename", &baton.tile_basename);
+        }
+        image.dzsave_with_opts(&baton.file_out, options)?;
+        baton.format_out = "dz".to_string();
+    } else if baton.format_out == "v"
+        || (might_match_input && is_v)
+        || (will_match_input && input_image_type == ImageType::VIPS)
+    {
+        // Write V to file
+        image
+            .vipssave_with_opts(&baton.file_out, VOption::new().set("keep", baton.keep_metadata))?;
+        baton.format_out = "v".to_string();
+    } else {
+        // Unsupported output format
+        baton.err.push_str(&format!("Unsupported output format {}", baton.file_out));
+        return Err(OperationError(baton.err.clone()));
+    }
 
     Ok(baton)
 }

@@ -76,6 +76,8 @@ pub fn boolean() {
             None
         );
     });
+
+    rs_vips::Vips::shutdown();
 }
 
 fn to_string(o: OperationBoolean) -> String {

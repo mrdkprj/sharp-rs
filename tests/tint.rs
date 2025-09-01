@@ -1,13 +1,10 @@
 mod fixtures;
-use crate::fixtures::clean_up;
 use sharp::{Colour, Sharp};
 
 const MAX_DISTANCE: f64 = 6.0;
 
 #[test]
 pub fn tint() {
-    clean_up();
-
     //tints rgb image red
     let output = fixtures::output("output.tint-red.jpg");
     Sharp::new_from_file(fixtures::inputJpg())
@@ -85,5 +82,6 @@ pub fn tint() {
         .unwrap();
     assert_max_colour_distance!(output, fixtures::expected("tint-cmyk.jpg"), MAX_DISTANCE);
 
-    clean_up();
+    fixtures::clean_up();
+    rs_vips::Vips::shutdown();
 }

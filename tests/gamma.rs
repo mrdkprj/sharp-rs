@@ -60,4 +60,6 @@ pub fn gamma() {
         .to_buffer()
         .unwrap();
     assert_similar!(fixtures::expected("gamma-alpha.jpg"), data, None);
+
+    rs_vips::Vips::shutdown();
 }

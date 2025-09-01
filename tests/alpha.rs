@@ -144,4 +144,8 @@ pub fn alpha() {
     .to_buffer()
     .unwrap();
     assert_eq!(buf[0..4], vec![255, 0, 0, 127]);
+
+    fixtures::clean_up();
+
+    rs_vips::Vips::shutdown();
 }

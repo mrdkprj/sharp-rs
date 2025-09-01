@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-use crate::fixtures::clean_up;
 use nonstd::fs;
 use sharp::{
     output::{JpegOptions, PngOptions, TileOptions, WebpOptions},
@@ -10,8 +9,6 @@ mod fixtures;
 
 #[test]
 fn tile() {
-    clean_up();
-
     //Deep Zoom layout
     println!("{}", line!());
     let directory = fixtures::output("output.dzi_files");
@@ -28,7 +25,7 @@ fn tile() {
     //Deep Zoom layout with custom size+overlap
     println!("{}", line!());
     let directory = fixtures::output("output.512.dzi_files");
-    Sharp::new_from_file(fixtures::inputJpg())
+    let info = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .tile(Some(TileOptions {
             size: Some(512),
@@ -47,7 +44,7 @@ fn tile() {
     //Deep Zoom layout with custom size+angle
     println!("{}", line!());
     let directory = fixtures::output("output.512_90.dzi_files");
-    Sharp::new_from_file(fixtures::inputJpg())
+    let info = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .tile(Some(TileOptions {
             size: Some(512),
@@ -77,7 +74,7 @@ fn tile() {
             ..Default::default()
         }))
         .unwrap()
-        .to_file_with_info(fixtures::output("output.512_depth_one.dzi"))
+        .to_file(fixtures::output("output.512_depth_one.dzi"))
         .unwrap();
     assertDeepZoomTiles(&directory, 512, 1);
 
@@ -92,7 +89,7 @@ fn tile() {
             ..Default::default()
         }))
         .unwrap()
-        .to_file_with_info(fixtures::output("output.512_depth_onepixel.dzi"))
+        .to_file(fixtures::output("output.512_depth_onepixel.dzi"))
         .unwrap();
     assertDeepZoomTiles(&directory, 512, 13);
 
@@ -107,7 +104,7 @@ fn tile() {
             ..Default::default()
         }))
         .unwrap()
-        .to_file_with_info(fixtures::output("output.256_depth_onetile.dzi"))
+        .to_file(fixtures::output("output.256_depth_onetile.dzi"))
         .unwrap();
     assertDeepZoomTiles(&directory, 256, 5);
 
@@ -122,7 +119,7 @@ fn tile() {
             ..Default::default()
         }))
         .unwrap()
-        .to_file_with_info(fixtures::output("output.256_skip_blanks.dzi"))
+        .to_file(fixtures::output("output.256_skip_blanks.dzi"))
         .unwrap();
     let whiteTilePath = directory.join("11").join("0_0.jpeg");
     assert!(!whiteTilePath.exists());
@@ -150,7 +147,7 @@ fn tile() {
     //Zoomify layout with depth one
     println!("{}", line!());
     let directory = fixtures::output("output.zoomify.depth_one.dzi");
-    Sharp::new_from_file(fixtures::inputJpg())
+    let info = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .tile(Some(TileOptions {
             size: Some(256),
@@ -307,7 +304,7 @@ fn tile() {
 
     //Google layout with webp format
     let directory = fixtures::output("output.webp.google.dzi");
-    Sharp::new_from_file(fixtures::inputJpg())
+    let info = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
         .webp(Some(WebpOptions {
             quality: Some(1),
@@ -507,7 +504,8 @@ fn tile() {
     assert!(stat.is_file);
     assert!(stat.size > 0);
 
-    clean_up();
+    fixtures::clean_up();
+    rs_vips::Vips::shutdown();
 }
 
 // Verifies all tiles in a given dz output directory are <= size

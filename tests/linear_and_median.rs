@@ -186,4 +186,6 @@ pub fn linear_and_median() {
     .to_buffer()
     .unwrap();
     assert_eq!(data[0..6], vec![0, 3, 15, 15, 63, 127]);
+
+    rs_vips::Vips::shutdown();
 }

@@ -172,4 +172,7 @@ pub fn colourspace() {
         .to_buffer()
         .unwrap();
     assert_eq!(buf[0..3], vec![234, 51, 34]);
+
+    fixtures::clean_up();
+    rs_vips::Vips::shutdown();
 }

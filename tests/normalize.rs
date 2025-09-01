@@ -59,7 +59,7 @@ pub fn normalize() {
         .unwrap();
     let metadata = Sharp::new_from_buffer(data).unwrap().metadata().unwrap();
     assert_eq!(4, metadata.channels);
-    assert_eq!(true, metadata.has_alpha);
+    assert!(metadata.has_alpha);
     assert_eq!("srgb", metadata.space);
 
     //keeps the alpha channel of greyscale images intact
@@ -73,7 +73,7 @@ pub fn normalize() {
         .unwrap();
     let metadata = Sharp::new_from_buffer(data).unwrap().metadata().unwrap();
     assert_eq!(4, metadata.channels);
-    assert_eq!(true, metadata.has_alpha);
+    assert!(metadata.has_alpha);
     assert_eq!("srgb", metadata.space);
 
     //does not alter images with only one color
@@ -110,4 +110,6 @@ pub fn normalize() {
         .to_buffer()
         .unwrap();
     assert_normalized(data);
+
+    rs_vips::Vips::shutdown();
 }

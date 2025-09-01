@@ -320,6 +320,7 @@ impl Sharp {
         if self.is_rotation_expected() && self.is_resize_expected() {
             self.options.rotate_before = true;
         }
+
         Ok(self)
     }
 

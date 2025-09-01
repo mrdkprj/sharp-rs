@@ -56,4 +56,6 @@ pub fn convolve() {
     assert_eq!(320, info.width);
     assert_eq!(240, info.height);
     assert_similar!(fixtures::expected("conv-sobel-horizontal.jpg"), data, None);
+
+    rs_vips::Vips::shutdown();
 }

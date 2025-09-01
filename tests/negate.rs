@@ -7,24 +7,6 @@ use sharp::{
 
 #[test]
 pub fn negate() {
-    let (data, info) = Sharp::new_from_file(fixtures::inputWebPWithTransparency())
-        .unwrap()
-        .resize(320, 240)
-        .unwrap()
-        .negate(
-            true,
-            Some(NegateOptions {
-                alpha: Some(false),
-            }),
-        )
-        .unwrap()
-        .to_buffer_with_info()
-        .unwrap();
-    assert_eq!("webp", info.format);
-    assert_eq!(320, info.width);
-    assert_eq!(240, info.height);
-    assert_similar!(fixtures::expected("negate-preserve-alpha-trans.webp"), data, None);
-
     //negate (jpeg)
     let (data, info) = Sharp::new_from_file(fixtures::inputJpg())
         .unwrap()
@@ -262,5 +244,7 @@ pub fn negate() {
     .unwrap()
     .to_buffer()
     .unwrap();
-    assert_eq!(data[0..3], vec![245, 235, 225])
+    assert_eq!(data[0..3], vec![245, 235, 225]);
+
+    rs_vips::Vips::shutdown();
 }

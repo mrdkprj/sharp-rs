@@ -50,4 +50,6 @@ pub fn dilate_erode() {
     assert_eq!(100, info.width);
     assert_eq!(100, info.height);
     assert_similar!(fixtures::expected("erode-1.png"), data, None);
+
+    rs_vips::Vips::shutdown();
 }

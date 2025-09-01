@@ -154,7 +154,7 @@ pub(crate) fn get_g_type(name: &str) -> u64 {
 }
 
 pub(crate) fn available_formats() -> HashMap<String, AvailableFormat> {
-    Vips::init("sharp", false).unwrap();
+    Vips::init("sharp").unwrap();
     let mut formats = HashMap::new();
     [
         "jpeg",

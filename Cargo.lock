@@ -151,6 +151,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c4b4d0bd25bd0b74681c0ad21497610ce1b7c91b1022cd21c80c6fbdd9476b0"
 
 [[package]]
+name = "bin-rs"
+version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e62e12dae19127152eee5b5ff249a86100a01e388abbac4c22e9f97eb33d9c3d"
+
+[[package]]
 name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -633,6 +639,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
+name = "icc-profile"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ee29116211aabdc036230a23dd6d875f8cfa57ae735d0958c62b1dc4e000a5"
+dependencies = [
+ "bin-rs",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -969,6 +984,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
+name = "rexif"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be932047c168919c8d5af065b16fa7d4bd24835ffa256bf0cf1ff463f91c15df"
+
+[[package]]
 name = "rfd"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -994,9 +1015,9 @@ dependencies = [
 
 [[package]]
 name = "rs-vips"
-version = "0.1.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "722006cdd8f62b43d74f2039c7d02330a442845a974eb81d0329955574289f27"
+checksum = "000c9f9e9518a1c48953a015915c7fb77a68dde6b9885bfdd5f6da51d6fd3a86"
 dependencies = [
  "num-derive",
  "num-traits",
@@ -1102,9 +1123,11 @@ name = "sharp"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "icc-profile",
  "nonstd",
  "num-derive",
  "num-traits",
+ "rexif",
  "rs-vips",
  "serde",
  "strum",

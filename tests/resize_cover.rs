@@ -288,4 +288,6 @@ fn resize_cover() {
     assert_eq!(288, info.attention_x);
     assert_eq!(745, info.attention_y);
     assert_similar!(fixtures::expected("crop-strategy.webp"), data, None);
+
+    rs_vips::Vips::shutdown();
 }

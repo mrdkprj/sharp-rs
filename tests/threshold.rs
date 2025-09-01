@@ -136,4 +136,6 @@ fn threshold() {
     assert_eq!(320, info.width);
     assert_eq!(240, info.height);
     assert_similar!(fixtures::expected("threshold-color-128.jpg"), data, None);
+
+    rs_vips::Vips::shutdown();
 }

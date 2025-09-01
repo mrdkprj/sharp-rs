@@ -192,7 +192,9 @@ pub fn affine() {
             data,
             None
         );
-    })
+    });
+
+    rs_vips::Vips::shutdown();
 }
 
 fn interp_to_string(interp: Interpolators) -> String {

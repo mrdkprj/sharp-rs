@@ -152,4 +152,6 @@ pub fn blur() {
         .unwrap();
     assert_ne!(min_amplitude_low, min_amplitude_default);
     assert_similar!(fixtures::expected("blur-10.jpg"), min_amplitude_low, None);
+
+    rs_vips::Vips::shutdown();
 }

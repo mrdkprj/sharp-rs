@@ -86,7 +86,7 @@ impl Sharp {
         }
 
         // Image is not opaque when alpha layer is present and contains a non-mamixa value
-        if image.image_hasalpha() {
+        if image.hasalpha() {
             let min_alpha = *(stats_image.getpoint(STAT_MIN_INDEX, bands)?.first().unwrap_or(&0.0));
             if min_alpha
                 != unsafe { vips_interpretation_max_alpha(image.get_interpretation()? as _) }
@@ -104,7 +104,7 @@ impl Sharp {
         if image.get_width() > 1 || image.get_height() > 1 {
             let laplacian =
                 VipsImage::new_matrixv(3, 3, &[0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0])?;
-            laplacian.set_double("scale", 9.0);
+            laplacian.set_double("scale", 9.0)?;
             stats.sharpness = greyscale.conv(&laplacian)?.deviate()?;
         }
 

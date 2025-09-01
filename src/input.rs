@@ -588,11 +588,11 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
         };
 
         if descriptor.create_page_height > 0 {
-            image.set_int(VIPS_META_PAGE_HEIGHT, descriptor.create_page_height);
+            image.set_int(VIPS_META_PAGE_HEIGHT, descriptor.create_page_height)?;
             image.set_int(
                 VIPS_META_N_PAGES,
                 descriptor.create_height / descriptor.create_page_height,
-            );
+            )?;
         }
 
         let image = image.cast(BandFormat::Uchar)?;
@@ -605,8 +605,11 @@ pub(crate) fn open_input_from(descriptor: &InputDescriptor) -> Result<(VipsImage
             .set("justify", descriptor.text_justify)
             .set("rgba", descriptor.text_rgba)
             .set("spacing", descriptor.text_spacing)
-            .set("wrap", descriptor.text_wrap as i32)
-            .set("autofit_dpi", descriptor.text_autofit_dpi);
+            .set("wrap", descriptor.text_wrap as i32);
+
+        if descriptor.text_autofit_dpi > 0 {
+            text_options.add("autofit_dpi", descriptor.text_autofit_dpi);
+        }
 
         if descriptor.text_width > 0 {
             text_options.add("width", descriptor.text_width);
@@ -736,9 +739,11 @@ pub(crate) fn open_input_from_buffer(
         unsafe {
             (*image.as_mut_ptr()).Type = space as i32;
             if descriptor.raw_page_height > 0 {
-                image.set_int(VIPS_META_PAGE_HEIGHT, descriptor.raw_page_height);
-                image
-                    .set_int(VIPS_META_N_PAGES, descriptor.raw_height / descriptor.raw_page_height);
+                image.set_int(VIPS_META_PAGE_HEIGHT, descriptor.raw_page_height)?;
+                image.set_int(
+                    VIPS_META_N_PAGES,
+                    descriptor.raw_height / descriptor.raw_page_height,
+                )?;
             }
             let image = if descriptor.raw_premultiplied {
                 image.unpremultiply()?
@@ -781,7 +786,8 @@ pub(crate) fn open_input_from_buffer(
                 ImageType::MAGICK => option.add("density", &density),
                 _ => {}
             };
-            let image = VipsImage::new_from_buffer_with_opts(descriptor.buffer.as_slice(), option)?;
+            let image = VipsImage::new_from_buffer_with_opts(&descriptor.buffer, "", option)?;
+
             if image_type == ImageType::SVG
                 || image_type == ImageType::PDF
                 || image_type == ImageType::MAGICK

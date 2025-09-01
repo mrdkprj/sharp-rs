@@ -15,17 +15,6 @@ pub fn assert_max_colour_distance<P1: AsRef<Path>, P2: AsRef<Path>>(
     expected: P2,
     acceptedDistance: f64,
 ) -> Result<(), String> {
-    /*
-        if (typeof acceptedDistance !== 'number') {
-      // Default threshold
-      acceptedDistance = 1;
-    }
-    const distance = maxColourDistance(actualImagePath, expectedImagePath);
-    if (distance > acceptedDistance) {
-      throw new Error('Expected maximum absolute distance of ' + acceptedDistance + ', actual ' + distance);
-    }
-     */
-
     let distance = max_colour_distance(actual, expected)?;
     if distance > acceptedDistance {
         return Err(format!(
@@ -41,11 +30,9 @@ fn max_colour_distance<P1: AsRef<Path>, P2: AsRef<Path>>(
     expected: P2,
 ) -> Result<f64, String> {
     let image_type1 = determindetermine_image_type(actual.as_ref().to_str().unwrap());
-
     if image_type1 == ImageType::UNKNOWN {
         return Err("Input file 1 is of an unsupported image format".to_string());
     }
-
     let mut image1 =
         VipsImage::new_from_file(actual.as_ref().to_str().unwrap()).map_err(|e| e.to_string())?;
 
@@ -53,7 +40,6 @@ fn max_colour_distance<P1: AsRef<Path>, P2: AsRef<Path>>(
     if image_type2 == ImageType::UNKNOWN {
         return Err("Input file 2 is of an unsupported image format".to_string());
     }
-
     let mut image2 =
         VipsImage::new_from_file(actual.as_ref().to_str().unwrap()).map_err(|e| e.to_string())?;
 
@@ -65,7 +51,7 @@ fn max_colour_distance<P1: AsRef<Path>, P2: AsRef<Path>>(
         return Err("mismatchedDimensions".to_string());
     }
 
-    if image1.image_hasalpha() {
+    if image1.hasalpha() {
         image1 = image1
             .premultiply()
             .map_err(|e| e.to_string())?
@@ -73,7 +59,7 @@ fn max_colour_distance<P1: AsRef<Path>, P2: AsRef<Path>>(
             .map_err(|e| e.to_string())?;
     }
 
-    if image2.image_hasalpha() {
+    if image2.hasalpha() {
         image2 = image2
             .premultiply()
             .map_err(|e| e.to_string())?

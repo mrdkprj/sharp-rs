@@ -370,6 +370,9 @@ pub fn composite() {
             None
         );
     });
+
+    fixtures::clean_up();
+    rs_vips::Vips::shutdown();
 }
 
 fn blend_to_string(blend: BlendMode) -> String {

@@ -172,5 +172,7 @@ pub fn join_channel() {
     assert_eq!(320, info.width);
     assert_eq!(240, info.height);
     assert_eq!(4, info.channels);
-    assert_similar!(fixtures::expected("joinChannel-rgb.jpg"), data, None);
+    assert_similar!(fixtures::expected("joinChannel-rgba.png"), data, None);
+
+    rs_vips::Vips::shutdown();
 }

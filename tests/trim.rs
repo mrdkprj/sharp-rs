@@ -269,4 +269,6 @@ fn trim() {
     assert_eq!(info.height, 401);
     assert_eq!(info.trim_offset_top, 0);
     assert_eq!(info.trim_offset_left, 0);
+
+    rs_vips::Vips::shutdown();
 }

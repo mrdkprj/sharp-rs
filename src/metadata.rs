@@ -23,6 +23,20 @@ use std::{
     ffi::{c_char, c_void, CStr, CString},
 };
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AutoOrient {
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct BackgroundColor {
+    pub r: f64,
+    pub g: f64,
+    pub b: f64,
+    pub gray: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     pub format: String,
@@ -46,16 +60,17 @@ pub struct Metadata {
     pub format_magick: String,
     pub levels: Vec<(i32, i32)>,
     pub subifds: i32,
-    pub background: Vec<f64>,
+    pub background: BackgroundColor,
     pub has_profile: bool,
     pub has_alpha: bool,
     pub orientation: i32,
-    pub exif: Vec<f64>,
-    pub icc: Vec<f64>,
-    pub iptc: Vec<f64>,
-    pub xmp: Vec<f64>,
-    pub tifftag_photoshop: Vec<f64>,
+    pub exif: Vec<u8>,
+    pub icc: Vec<u8>,
+    pub iptc: Vec<u8>,
+    pub xmp: Vec<u8>,
+    pub tifftag_photoshop: Vec<u8>,
     pub comments: HashMap<String, String>,
+    pub auto_orient: AutoOrient,
 }
 
 impl Default for Metadata {
@@ -90,8 +105,9 @@ impl Default for Metadata {
             resolution_unit: String::new(),
             format_magick: String::new(),
             levels: Vec::new(),
-            background: Vec::new(),
+            background: BackgroundColor::default(),
             comments: HashMap::new(),
+            auto_orient: AutoOrient::default(),
         }
     }
 }
@@ -159,44 +175,49 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
         if has_density(&image) {
             baton.density = get_density(&image);
         }
-        if image.get_typeof("jpeg-chroma-subsample") == unsafe { vips_ref_string_get_type() } {
+        if image.get_typeof("jpeg-chroma-subsample")? == unsafe { vips_ref_string_get_type() } {
             baton.chroma_subsampling =
                 image.get_string("jpeg-chroma-subsample").unwrap_or_default();
         }
-        if image.get_typeof("interlaced") == get_g_type(G_TYPE_INT) {
+        if image.get_typeof("interlaced")? == get_g_type(G_TYPE_INT) {
             baton.is_progressive = image.get_int("interlaced").unwrap_or_default() == 1;
         }
-        if image.get_typeof(VIPS_META_PALETTE) == get_g_type(G_TYPE_INT) {
+        if image.get_typeof(VIPS_META_PALETTE)? == get_g_type(G_TYPE_INT) {
             baton.is_palette = image.get_int(VIPS_META_PALETTE).unwrap_or_default() == 1;
         }
-        if image.get_typeof(VIPS_META_BITS_PER_SAMPLE) == get_g_type(G_TYPE_INT) {
+        if image.get_typeof(VIPS_META_BITS_PER_SAMPLE)? == get_g_type(G_TYPE_INT) {
             baton.bits_per_sample = image.get_int(VIPS_META_BITS_PER_SAMPLE).unwrap_or_default();
         }
-        if image.get_typeof(VIPS_META_N_PAGES) == get_g_type(G_TYPE_INT) {
+        if image.get_typeof(VIPS_META_N_PAGES)? == get_g_type(G_TYPE_INT) {
             baton.pages = image.get_int(VIPS_META_N_PAGES).unwrap_or_default();
         }
-        if image.get_typeof(VIPS_META_PAGE_HEIGHT) == get_g_type(G_TYPE_INT) {
+        if image.get_typeof(VIPS_META_PAGE_HEIGHT)? == get_g_type(G_TYPE_INT) {
             baton.page_height = image.get_int(VIPS_META_PAGE_HEIGHT).unwrap_or_default();
         }
-        if image.get_typeof("loop") == get_g_type(G_TYPE_INT) {
+        if image.get_typeof("loop")? == get_g_type(G_TYPE_INT) {
             baton.loop_ = image.get_int("loop").unwrap_or_default();
         }
-        if image.get_typeof("delay") == unsafe { vips_array_int_get_type() } {
+        if image.get_typeof("delay")? == unsafe { vips_array_int_get_type() } {
             baton.delay = image.get_array_int("delay").unwrap_or_default();
         }
-        if image.get_typeof("heif-primary") == get_g_type(G_TYPE_INT) {
+        if image.get_typeof("heif-primary")? == get_g_type(G_TYPE_INT) {
             baton.page_primary = image.get_int("heif-primary").unwrap_or_default();
         }
-        if image.get_typeof("heif-compression") == unsafe { vips_ref_string_get_type() } {
+        if image.get_typeof("heif-compression")? == unsafe { vips_ref_string_get_type() } {
             baton.compression = image.get_string("heif-compression").unwrap_or_default();
         }
-        if image.get_typeof(VIPS_META_RESOLUTION_UNIT) == unsafe { vips_ref_string_get_type() } {
-            baton.resolution_unit = image.get_string(VIPS_META_RESOLUTION_UNIT).unwrap_or_default();
+        if image.get_typeof(VIPS_META_RESOLUTION_UNIT)? == unsafe { vips_ref_string_get_type() } {
+            let resolution_unit = image.get_string(VIPS_META_RESOLUTION_UNIT).unwrap_or_default();
+            if resolution_unit == "in" {
+                baton.resolution_unit = "inch".to_string();
+            } else {
+                baton.resolution_unit = resolution_unit;
+            }
         }
-        if image.get_typeof("magick-format") == unsafe { vips_ref_string_get_type() } {
+        if image.get_typeof("magick-format")? == unsafe { vips_ref_string_get_type() } {
             baton.format_magick = image.get_string("magick-format").unwrap_or_default();
         }
-        if image.get_typeof("openslide.level-count") == unsafe { vips_ref_string_get_type() } {
+        if image.get_typeof("openslide.level-count")? == unsafe { vips_ref_string_get_type() } {
             let levels: i32 = image
                 .get_string("openslide.level-count")
                 .unwrap_or(String::from("0"))
@@ -217,51 +238,64 @@ pub(crate) fn get_metadata(input: &InputDescriptor) -> Result<Metadata> {
                 baton.levels.push((width, height));
             }
         }
-        if image.get_typeof(VIPS_META_N_SUBIFDS) == get_g_type(G_TYPE_INT) {
+        if image.get_typeof(VIPS_META_N_SUBIFDS)? == get_g_type(G_TYPE_INT) {
             baton.subifds = image.get_int(VIPS_META_N_SUBIFDS).unwrap_or_default();
         }
         baton.has_profile = has_profile(&image);
-        if image.get_typeof("background") == unsafe { vips_array_double_get_type() } {
-            baton.background = image.get_array_double("background").unwrap_or_default();
+        if image.get_typeof("background")? == unsafe { vips_array_double_get_type() } {
+            let background = image.get_array_double("background").unwrap_or_default();
+            if !background.is_empty() {
+                if background.len() == 3 {
+                    baton.background.r = background[0];
+                    baton.background.g = background[1];
+                    baton.background.b = background[2];
+                } else {
+                    baton.background.gray = background[0] * 100.0 / 255.0
+                }
+            }
         }
         // Derived attributes
-        baton.has_alpha = image.image_hasalpha();
+        baton.has_alpha = image.hasalpha();
         baton.orientation = exif_orientation(&image);
 
-        if baton.orientation >= 5 {
-            baton.width = image.get_height();
-            baton.height = image.get_width();
-        }
-
         // EXIF
-        if image.get_typeof(VIPS_META_EXIF_NAME) == unsafe { vips_blob_get_type() } {
-            let exif = image.get_blob(VIPS_META_EXIF_NAME).unwrap_or_default();
-            baton.exif = exif.iter().map(|e| *e as f64).collect();
+        if image.get_typeof(VIPS_META_EXIF_NAME)? == unsafe { vips_blob_get_type() } {
+            baton.exif = image.get_blob(VIPS_META_EXIF_NAME).unwrap_or_default();
         }
         // ICC profile
-        if image.get_typeof(VIPS_META_ICC_NAME) == unsafe { vips_blob_get_type() } {
-            let icc = image.get_blob(VIPS_META_ICC_NAME).unwrap_or_default();
-            baton.icc = icc.iter().map(|e| *e as f64).collect();
+        if image.get_typeof(VIPS_META_ICC_NAME)? == unsafe { vips_blob_get_type() } {
+            baton.icc = image.get_blob(VIPS_META_ICC_NAME).unwrap_or_default();
         }
         // IPTC
-        if image.get_typeof(VIPS_META_IPTC_NAME) == unsafe { vips_blob_get_type() } {
-            let iptc = image.get_blob(VIPS_META_IPTC_NAME).unwrap_or_default();
-            baton.iptc = iptc.iter().map(|e| *e as f64).collect();
+        if image.get_typeof(VIPS_META_IPTC_NAME)? == unsafe { vips_blob_get_type() } {
+            baton.iptc = image.get_blob(VIPS_META_IPTC_NAME).unwrap_or_default();
         }
         // XMP
-        if image.get_typeof(VIPS_META_XMP_NAME) == unsafe { vips_blob_get_type() } {
-            let xmp = image.get_blob(VIPS_META_XMP_NAME).unwrap_or_default();
-            baton.xmp = xmp.iter().map(|e| *e as f64).collect();
+        if image.get_typeof(VIPS_META_XMP_NAME)? == unsafe { vips_blob_get_type() } {
+            baton.xmp = image.get_blob(VIPS_META_XMP_NAME).unwrap_or_default();
         }
         // TIFFTAG_PHOTOSHOP
-        if image.get_typeof(VIPS_META_PHOTOSHOP_NAME) == unsafe { vips_blob_get_type() } {
-            let tifftag_photoshop = image.get_blob(VIPS_META_PHOTOSHOP_NAME).unwrap_or_default();
-            baton.tifftag_photoshop = tifftag_photoshop.iter().map(|e| *e as f64).collect();
+        if image.get_typeof(VIPS_META_PHOTOSHOP_NAME)? == unsafe { vips_blob_get_type() } {
+            baton.tifftag_photoshop = image.get_blob(VIPS_META_PHOTOSHOP_NAME).unwrap_or_default();
         }
         // PNG comments
-        let mut comments = Box::new(baton.comments.clone());
+        let mut comments = Box::new(HashMap::new());
         let comments_ptr: *mut c_void = &mut *comments as *mut _ as *mut c_void;
         unsafe { vips_image_map(image.as_mut_ptr(), Some(read_pngcomment), comments_ptr) };
+        baton.comments = *comments;
+
+        // AutoOrient
+        if baton.orientation >= 5 {
+            baton.auto_orient = AutoOrient {
+                width: baton.height,
+                height: baton.width,
+            };
+        } else {
+            baton.auto_orient = AutoOrient {
+                width: baton.width,
+                height: baton.height,
+            };
+        }
     }
 
     Ok(baton)
@@ -277,15 +311,14 @@ unsafe extern "C" fn read_pngcomment(
         unsafe { &mut *(data as *mut HashMap<String, String>) };
 
     let png_comment_start = CString::new("png-comment-").unwrap();
-    let png_comment_start_len = png_comment_start.to_string_lossy().len();
-    let raw: *const c_char = png_comment_start.as_ptr();
+    let png_comment_start_len = "png-comment-".len();
 
-    if vips_isprefix(raw, field) == 1 {
-        let field_str = CStr::from_ptr(field).to_string_lossy().into_owned();
+    if vips_isprefix(png_comment_start.as_ptr(), field) == 1 {
+        let field_str = CStr::from_ptr(field).to_str().unwrap();
         let rest = &field_str[png_comment_start_len..];
         let keyword = rest.find('-').map(|idx| &rest[idx..]);
         let mut str: *const c_char = std::ptr::null();
-        if keyword.is_some() && vips_image_get_string(image, field, &mut str) != 0 {
+        if keyword.is_some() && vips_image_get_string(image, field, &mut str) == 0 {
             // Skip the hyphen
             let keyword = &keyword.unwrap()[1..];
             let value = CStr::from_ptr(str).to_string_lossy().into_owned();

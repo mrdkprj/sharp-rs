@@ -134,4 +134,6 @@ pub fn join() {
     assert_eq!(metadata.width, 68);
     assert_eq!(metadata.height, 68);
     assert_eq!(metadata.pages, 2);
+
+    rs_vips::Vips::shutdown();
 }

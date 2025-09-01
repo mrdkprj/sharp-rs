@@ -1,60 +1,61 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
+#![allow(unused_imports)]
 use nonstd::fs;
 use sharp::{operation::FlattenOptions, resize::ResizeOptions, Colour, Sharp};
 use std::path::{Path, PathBuf};
+
+use crate::fixtures;
 pub mod maxcolor;
 
 pub fn inputJpgWithLandscapeExif1() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_1.jpg")
+    fixtures::path("Landscape_1.jpg")
 }
 pub fn inputJpgWithLandscapeExif2() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_2.jpg")
+    fixtures::path("Landscape_2.jpg")
 }
 pub fn inputJpgWithLandscapeExif3() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_3.jpg")
+    fixtures::path("Landscape_3.jpg")
 }
 pub fn inputJpgWithLandscapeExif4() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_4.jpg")
+    fixtures::path("Landscape_4.jpg")
 }
 pub fn inputJpgWithLandscapeExif5() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_5.jpg")
+    fixtures::path("Landscape_5.jpg")
 }
 pub fn inputJpgWithLandscapeExif6() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_6.jpg")
+    fixtures::path("Landscape_6.jpg")
 }
 pub fn inputJpgWithLandscapeExif7() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_7.jpg")
+    fixtures::path("Landscape_7.jpg")
 }
 pub fn inputJpgWithLandscapeExif8() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_8.jpg")
+    fixtures::path("Landscape_8.jpg")
 }
-
 pub fn inputJpgWithPortraitExif1() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_1.jpg")
+    fixtures::path("Portrait_1.jpg")
 }
 pub fn inputJpgWithPortraitExif2() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_2.jpg")
+    fixtures::path("Portrait_2.jpg")
 }
 pub fn inputJpgWithPortraitExif3() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_3.jpg")
+    fixtures::path("Portrait_3.jpg")
 }
 pub fn inputJpgWithPortraitExif4() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_4.jpg")
+    fixtures::path("Portrait_4.jpg")
 }
 pub fn inputJpgWithPortraitExif5() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_5.jpg")
+    fixtures::path("Portrait_5.jpg")
 }
 pub fn inputJpgWithPortraitExif6() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_6.jpg")
+    fixtures::path("Portrait_6.jpg")
 }
 pub fn inputJpgWithPortraitExif7() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_7.jpg")
+    fixtures::path("Portrait_7.jpg")
 }
 pub fn inputJpgWithPortraitExif8() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Portrait_8.jpg")
+    fixtures::path("Portrait_8.jpg")
 }
-
 pub fn inputJpg() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -62,13 +63,13 @@ pub fn inputJpg() -> PathBuf {
         .join("2569067123_aca715a2ee_o.jpg")
 }
 pub fn inputJpgWithExif() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_8.jpg")
+    fixtures::path("Landscape_8.jpg")
 }
 pub fn inputJpgWithIptcAndXmp() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_9.jpg")
+    fixtures::path("Landscape_9.jpg")
 }
 pub fn inputJpgWithExifMirroring() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Landscape_5.jpg")
+    fixtures::path("Landscape_5.jpg")
 }
 pub fn inputJpgWithGammaHoliness() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -89,65 +90,64 @@ pub fn inputJpgWithCmykNoProfile() -> PathBuf {
         .join("Channel_digital_image_CMYK_color_no_profile.jpg")
 }
 pub fn inputJpgWithCorruptHeader() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("corrupt-header.jpg")
+    fixtures::path("corrupt-header.jpg")
 }
 pub fn inputJpgWithLowContrast() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("low-contrast.jpg")
+    fixtures::path("low-contrast.jpg")
 }
 pub fn inputJpgLarge() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("giant-image.jpg")
+    fixtures::path("giant-image.jpg")
 }
 pub fn inputJpg320x240() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("320x240.jpg")
+    fixtures::path("320x240.jpg")
 }
 pub fn inputJpgOverlayLayer2() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("alpha-layer-2-ink.jpg")
+    fixtures::path("alpha-layer-2-ink.jpg")
 }
 pub fn inputJpgTruncated() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("truncated.jpg")
+    fixtures::path("truncated.jpg")
 }
 pub fn inputJpgCenteredImage() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("centered_image.jpeg")
+    fixtures::path("centered_image.jpeg")
 }
 pub fn inputJpgRandom() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("random.jpg")
+    fixtures::path("random.jpg")
 }
 pub fn inputJpgThRandom() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("thRandom.jpg")
+    fixtures::path("thRandom.jpg")
 }
 pub fn inputJpgLossless() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("testimgl.jpg")
+    fixtures::path("testimgl.jpg")
 }
-
 pub fn inputPng() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("50020484-00001.png")
+    fixtures::path("50020484-00001.png")
 }
 pub fn inputPngGradients() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("gradients-rgb8.png")
+    fixtures::path("gradients-rgb8.png")
 }
 pub fn inputPngWithTransparency() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("blackbug.png")
+    fixtures::path("blackbug.png")
 }
 pub fn inputPngCompleteTransparency() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("full-transparent.png")
+    fixtures::path("full-transparent.png")
 }
 pub fn inputPngWithGreyAlpha() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("grey-8bit-alpha.png")
+    fixtures::path("grey-8bit-alpha.png")
 }
 pub fn inputPngWithOneColor() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("2x2_fdcce6.png")
+    fixtures::path("2x2_fdcce6.png")
 }
 pub fn inputPngWithTransparency16bit() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("tbgn2c16.png")
+    fixtures::path("tbgn2c16.png")
 }
 pub fn inputPng8BitGreyBackground() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("bgbn4a08.png")
+    fixtures::path("bgbn4a08.png")
 }
 pub fn inputPng16BitGreyBackground() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("bggn4a16.png")
+    fixtures::path("bggn4a16.png")
 }
 pub fn inputPng16BitGreyAlpha() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("16-bit-grey-alpha.png")
+    fixtures::path("16-bit-grey-alpha.png")
 }
 pub fn inputPngOverlayLayer0() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -156,7 +156,7 @@ pub fn inputPngOverlayLayer0() -> PathBuf {
         .join("alpha-layer-0-background.png")
 }
 pub fn inputPngOverlayLayer1() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("alpha-layer-1-fill.png")
+    fixtures::path("alpha-layer-1-fill.png")
 }
 pub fn inputPngAlphaPremultiplicationSmall() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -171,16 +171,16 @@ pub fn inputPngAlphaPremultiplicationLarge() -> PathBuf {
         .join("alpha-premultiply-2048x1536-paper.png")
 }
 pub fn inputPngBooleanNoAlpha() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("bandbool.png")
+    fixtures::path("bandbool.png")
 }
 pub fn inputPngTestJoinChannel() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("testJoinChannel.png")
+    fixtures::path("testJoinChannel.png")
 }
 pub fn inputPngTruncated() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("truncated.png")
+    fixtures::path("truncated.png")
 }
 pub fn inputPngEmbed() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("embedgravitybird.png")
+    fixtures::path("embedgravitybird.png")
 }
 pub fn inputPngRGBWithAlpha() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -189,19 +189,19 @@ pub fn inputPngRGBWithAlpha() -> PathBuf {
         .join("2569067123_aca715a2ee_o.png")
 }
 pub fn inputPngImageInAlpha() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("image-in-alpha.png")
+    fixtures::path("image-in-alpha.png")
 }
 pub fn inputPngSolidAlpha() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("with-alpha.png")
+    fixtures::path("with-alpha.png")
 }
 pub fn inputPngP3() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("p3.png")
+    fixtures::path("p3.png")
 }
 pub fn inputPngPalette() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("swiss.png")
+    fixtures::path("swiss.png")
 }
 pub fn inputPngTrimIncludeAlpha() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("trim-mc.png")
+    fixtures::path("trim-mc.png")
 }
 pub fn inputPngTrimSpecificColour() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -222,75 +222,73 @@ pub fn inputPngTrimSpecificColourIncludeAlpha() -> PathBuf {
         .join("Flag_of_the_Netherlands-alpha.png")
 }
 pub fn inputPngUint32Limit() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("65536-uint32-limit.png")
+    fixtures::path("65536-uint32-limit.png")
 }
 pub fn inputPngWithProPhotoProfile() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("prophoto.png")
+    fixtures::path("prophoto.png")
 }
-
 pub fn inputWebP() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("4.webp")
+    fixtures::path("4.webp")
 }
 pub fn inputWebPWithTransparency() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("5_webp_a.webp")
+    fixtures::path("5_webp_a.webp")
 }
 pub fn inputWebPAnimated() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("rotating-squares.webp")
+    fixtures::path("rotating-squares.webp")
 }
 pub fn inputWebPAnimatedLoop3() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("animated-loop-3.webp")
+    fixtures::path("animated-loop-3.webp")
 }
 pub fn inputWebPAnimatedBigHeight() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("big-height.webp")
+    fixtures::path("big-height.webp")
 }
 pub fn inputTiff() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("G31D.TIF")
+    fixtures::path("G31D.TIF")
 }
 pub fn inputTiffMultipage() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("G31D_MULTI.TIF")
+    fixtures::path("G31D_MULTI.TIF")
 }
 pub fn inputTiffCielab() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("cielab-dagams.tiff")
+    fixtures::path("cielab-dagams.tiff")
 }
 pub fn inputTiffUncompressed() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("uncompressed_tiff.tiff")
+    fixtures::path("uncompressed_tiff.tiff")
 }
 pub fn inputTiff8BitDepth() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("8bit_depth.tiff")
+    fixtures::path("8bit_depth.tiff")
 }
 pub fn inputTifftagPhotoshop() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("tifftag-photoshop.tiff")
+    fixtures::path("tifftag-photoshop.tiff")
 }
 pub fn inputTiffFogra() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("fogra-0-100-100-0.tif")
+    fixtures::path("fogra-0-100-100-0.tif")
 }
-
 pub fn inputJp2() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("relax.jp2")
+    fixtures::path("relax.jp2")
 }
 pub fn inputJp2TileParts() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("relax_tileparts.jp2")
+    fixtures::path("relax_tileparts.jp2")
 }
 pub fn inputGif() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("Crash_test.gif")
+    fixtures::path("Crash_test.gif")
 }
 pub fn inputGifGreyPlusAlpha() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("grey-plus-alpha.gif")
+    fixtures::path("grey-plus-alpha.gif")
 }
 pub fn inputGifAnimated() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("rotating-squares.gif")
+    fixtures::path("rotating-squares.gif")
 }
 pub fn inputGifAnimatedLoop3() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("animated-loop-3.gif")
+    fixtures::path("animated-loop-3.gif")
 }
 pub fn inputSvg() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("check.svg")
+    fixtures::path("check.svg")
 }
 pub fn inputSvgSmallViewBox() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("circle.svg")
+    fixtures::path("circle.svg")
 }
 pub fn inputSvgWithEmbeddedImages() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("struct-image-04-t.svg")
+    fixtures::path("struct-image-04-t.svg")
 }
 pub fn inputAvif() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -298,40 +296,32 @@ pub fn inputAvif() -> PathBuf {
         .join("img")
         .join("sdr_cosmos12920_cicp1-13-6_yuv444_full_qp10.avif")
 }
-
 pub fn inputJPGBig() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("flowers.jpeg")
+    fixtures::path("flowers.jpeg")
 }
-
 pub fn inputPngDotAndLines() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("dot-and-lines.png")
+    fixtures::path("dot-and-lines.png")
 }
-
 pub fn inputPngStripesV() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("stripesV.png")
+    fixtures::path("stripesV.png")
 }
 pub fn inputPngStripesH() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("stripesH.png")
+    fixtures::path("stripesH.png")
 }
-
 pub fn inputJpgBooleanTest() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("booleanTest.jpg")
+    fixtures::path("booleanTest.jpg")
 }
-
 pub fn inputV() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("vfile.v")
+    fixtures::path("vfile.v")
 }
-
 pub fn inputJpgClahe() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("concert.jpg")
+    fixtures::path("concert.jpg")
 }
-
 pub fn testPattern() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("test-pattern.png")
+    fixtures::path("test-pattern.png")
 }
-
 pub fn inputPngWithTransparent() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("img").join("d.png")
+    fixtures::path("d.png")
 }
 
 pub fn input(name: &str) -> PathBuf {
@@ -431,6 +421,7 @@ pub fn input(name: &str) -> PathBuf {
         _ => testPattern(),
     }
 }
+
 enum PathOrBuffer {
     Path(String),
     Buffer(Vec<u8>),
@@ -438,13 +429,12 @@ enum PathOrBuffer {
 
 fn fingerprint(image: PathOrBuffer) -> Result<Vec<u8>, String> {
     let sharp = match image {
-        PathOrBuffer::Buffer(buffer) => Sharp::new_from_buffer(buffer).unwrap(),
+        PathOrBuffer::Buffer(buffer) => Sharp::new_from_buffer(buffer.clone()).unwrap(),
         PathOrBuffer::Path(file) => Sharp::new_from_file(file).unwrap(),
     };
+
     let data = sharp
-        .flatten(Some(FlattenOptions {
-            background: Some(Colour::from_hex(0x808080)),
-        }))
+        .flatten(None)
         .unwrap()
         .greyscale(true)
         .normalise(None)
@@ -489,6 +479,7 @@ pub fn assert_similar_<P: AsRef<Path>>(
             distance += 1;
         }
     }
+
     let threshold = threshold.unwrap_or(5);
     if distance > threshold {
         return Err(format!(
@@ -496,6 +487,7 @@ pub fn assert_similar_<P: AsRef<Path>>(
             threshold, distance
         ));
     }
+
     Ok(())
 }
 
@@ -525,6 +517,7 @@ macro_rules! assert_similar {
     };
 }
 
+// Default threshold = 1;
 #[macro_export]
 macro_rules! assert_max_colour_distance {
     ($actual:expr, $expected:expr, $th:expr) => {

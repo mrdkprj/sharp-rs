@@ -601,4 +601,6 @@ fn resize_contain() {
     assert_eq!(metadata.height, 8);
     assert_eq!(metadata.space, "srgb");
     assert_eq!(metadata.channels, 8);
+
+    rs_vips::Vips::shutdown();
 }

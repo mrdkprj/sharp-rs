@@ -78,6 +78,12 @@ pub struct Sharp {
 }
 
 impl Sharp {
+    fn init() -> Result<(), String> {
+        Vips::init("sharp-rs").map_err(|e| e.to_string())?;
+        Vips::leak_set(true);
+        Ok(())
+    }
+
     pub fn new(inputs: Inputs) -> Result<Self, String> {
         Self::new_sharp(inputs, None)
     }
@@ -95,7 +101,7 @@ impl Sharp {
             return Self::new_sharp_from_inputs(inputs, options);
         }
 
-        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+        Self::init()?;
 
         let mut baton = init_options();
         let input = inputs.inner.first().unwrap().clone();
@@ -113,7 +119,7 @@ impl Sharp {
             return Err("Expected at least two inputs to join".to_string());
         }
 
-        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+        Self::init()?;
         let mut baton = init_options();
         baton.input =
             create_input_descriptor(SharpInput::Mixed(inputs.inner), options, &mut baton)?;
@@ -137,7 +143,7 @@ impl Sharp {
         filename: P,
         options: Option<SharpOptions>,
     ) -> Result<Self, String> {
-        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+        Self::init()?;
         let mut baton = init_options();
         baton.input = create_input_descriptor(
             SharpInput::Single(MixedInput::path(filename)),
@@ -168,7 +174,7 @@ impl Sharp {
             return Err("Expected at least two images to join".to_string());
         }
 
-        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+        Self::init()?;
         let mut baton = init_options();
         let inputs = files.iter().map(MixedInput::path).collect();
         baton.input =
@@ -194,7 +200,7 @@ impl Sharp {
         buffer: Vec<u8>,
         options: Option<SharpOptions>,
     ) -> Result<Self, String> {
-        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+        Self::init()?;
         let mut baton = init_options();
         baton.input = create_input_descriptor(
             SharpInput::Single(MixedInput::Buffer(buffer)),
@@ -226,7 +232,7 @@ impl Sharp {
             return Err("Expected at least two images to join".to_string());
         }
 
-        Vips::init("sharp-rs", false).map_err(|e| e.to_string())?;
+        Self::init()?;
         let mut baton = init_options();
         let inputs = buffers.into_iter().map(MixedInput::Buffer).collect();
         baton.input =
@@ -857,15 +863,17 @@ impl Sharp {
             return Err("Invalid convolution kernel".to_string());
         }
         // Default scale is sum of kernel values
-        let scale = if let Some(scale) = kernel.scale {
-            // Clip scale to a minimum value of 1
-            if scale < 1.0 {
-                1.0
-            } else {
-                scale
-            }
+        let mut scale = if let Some(scale) = kernel.scale {
+            scale
         } else {
             kernel.kernel.clone().iter().sum()
+        };
+
+        // Clip scale to a minimum value of 1
+        scale = if scale < 1.0 {
+            1.0
+        } else {
+            scale
         };
 
         self.options.conv_kernel_scale = scale;

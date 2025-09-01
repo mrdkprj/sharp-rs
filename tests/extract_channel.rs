@@ -81,4 +81,7 @@ fn extract_channel() {
         .to_file(output.clone())
         .unwrap();
     assert_max_colour_distance!(output, fixtures::expected("extract-alpha-2-channel.png"), 1.0);
+
+    fixtures::clean_up();
+    rs_vips::Vips::shutdown();
 }

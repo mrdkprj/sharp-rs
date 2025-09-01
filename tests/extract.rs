@@ -326,4 +326,6 @@ pub fn extract() {
             .unwrap();
         assert_similar!(fixtures::expected("rotate-mirror-extract.jpg"), data, None);
     });
+
+    rs_vips::Vips::shutdown();
 }

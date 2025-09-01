@@ -799,4 +799,6 @@ fn resize() {
         .unwrap();
     assert_eq!(info.width, 500);
     assert_eq!(info.height, 334);
+
+    rs_vips::Vips::shutdown();
 }

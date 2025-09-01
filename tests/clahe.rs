@@ -106,4 +106,6 @@ pub fn clahe() {
         .to_buffer()
         .unwrap();
     assert_similar!(fixtures::expected("clahe-100-50-3.jpg"), data, None);
+
+    rs_vips::Vips::shutdown();
 }

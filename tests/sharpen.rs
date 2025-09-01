@@ -123,4 +123,6 @@ fn sharpen() {
     assert!(sharpened.len() > not_sharpened.len());
     assert_eq!(320, info.width);
     assert_eq!(240, info.height);
+
+    rs_vips::Vips::shutdown();
 }

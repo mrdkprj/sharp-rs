@@ -36,4 +36,6 @@ fn unflatten() {
         .to_buffer()
         .unwrap();
     assert_similar!(fixtures::expected("unflatten-swiss.png"), data, Some(1));
+
+    rs_vips::Vips::shutdown();
 }

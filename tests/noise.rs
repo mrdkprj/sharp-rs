@@ -202,4 +202,6 @@ pub fn noise() {
     assert_eq!(metadata.height, 16);
     assert_eq!(metadata.pages, 4);
     assert_eq!(metadata.delay.len(), 4);
+
+    rs_vips::Vips::shutdown();
 }

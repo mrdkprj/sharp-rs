@@ -129,4 +129,7 @@ fn recomb() {
     assert_eq!(48, info.height);
     fs::write(output.clone(), data).unwrap();
     assert_max_colour_distance!(output, fixtures::expected("d-opacity-30.png"), 17.0);
+
+    fixtures::clean_up();
+    rs_vips::Vips::shutdown();
 }

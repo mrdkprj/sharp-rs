@@ -28,6 +28,8 @@ pub fn bandbool() {
         .to_buffer_with_info()
         .unwrap();
     assert_eq!(3, info.channels);
+
+    rs_vips::Vips::shutdown();
 }
 
 fn to_string(o: OperationBoolean) -> String {

@@ -15,7 +15,7 @@ use rs_vips::{
 };
 use std::{collections::HashMap, path::Path};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OutputInfo {
     pub format: String,
     pub width: i32,
@@ -38,6 +38,7 @@ pub struct WithIccProfileOptions {
     pub attach: Option<bool>,
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct Exif {
     pub ifd0: Option<HashMap<String, String>>,
     pub ifd1: Option<HashMap<String, String>>,
@@ -638,19 +639,17 @@ impl Sharp {
      * @throws {Error} Invalid parameters
      */
     pub fn with_exif(mut self, exif: Exif) -> Self {
-        self.apply_exif("IFD0", exif.ifd0.unwrap_or_default());
-        self.apply_exif("IFD1", exif.ifd1.unwrap_or_default());
-        self.apply_exif("IFD2", exif.ifd2.unwrap_or_default());
-        self.apply_exif("IFD3", exif.ifd3.unwrap_or_default());
+        self.apply_exif("ifd0", exif.ifd0.unwrap_or_default());
+        self.apply_exif("ifd1", exif.ifd1.unwrap_or_default());
+        self.apply_exif("ifd2", exif.ifd2.unwrap_or_default());
+        self.apply_exif("ifd3", exif.ifd3.unwrap_or_default());
         self.options.with_exif_merge = false;
-        self
+        self.keep_exif()
     }
 
     fn apply_exif(&mut self, ifd: &str, values: HashMap<String, String>) {
         for (k, v) in values {
-            self.options
-                .with_exif
-                .insert(format!("exif-{:?}-{:?}", ifd.to_ascii_lowercase(), k), v);
+            self.options.with_exif.insert(format!("exif-{}-{}", ifd, k), v);
         }
     }
 
@@ -726,6 +725,55 @@ impl Sharp {
                 }
             }
         }
+        self
+    }
+
+    /**
+     * Keep XMP metadata from the input image in the output image.
+     *
+     * @since 0.34.3
+     *
+     * @example
+     * const outputWithXmp = await sharp(inputWithXmp)
+     *   .keepXmp()
+     *   .toBuffer();
+     *
+     * @returns {Sharp}
+     */
+    pub fn keep_xmp(mut self) -> Self {
+        self.options.keep_metadata |= 0b00010;
+        self
+    }
+
+    /**
+     * Set XMP metadata in the output image.
+     *
+     * Supported by PNG, JPEG, WebP, and TIFF output.
+     *
+     * @since 0.34.3
+     *
+     * @example
+     * const xmpString = `
+     *   <?xml version="1.0"?>
+     *   <x:xmpmeta xmlns:x="adobe:ns:meta/">
+     *     <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+     *       <rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">
+     *         <dc:creator><rdf:Seq><rdf:li>John Doe</rdf:li></rdf:Seq></dc:creator>
+     *       </rdf:Description>
+     *     </rdf:RDF>
+     *   </x:xmpmeta>`;
+     *
+     * const data = await sharp(input)
+     *   .withXmp(xmpString)
+     *   .toBuffer();
+     *
+     * @param {string} xmp String containing XMP metadata to be embedded in the output image.
+     * @returns {Sharp}
+     * @throws {Error} Invalid parameters
+     */
+    pub fn with_xmp(mut self, xmp: &str) -> Self {
+        self.options.with_xmp = xmp.to_string();
+        self.options.keep_metadata |= 0b00010;
         self
     }
 
