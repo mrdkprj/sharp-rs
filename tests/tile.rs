@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
-use nonstd::fs;
 use sharp::{
     output::{JpegOptions, PngOptions, TileOptions, WebpOptions},
     ForeignDzContainer, ForeignDzDepth, ForeignDzLayout, Sharp,
 };
 use std::path::Path;
+use zouni::fs;
 mod fixtures;
 
 #[test]

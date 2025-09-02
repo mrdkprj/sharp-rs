@@ -18,7 +18,7 @@ strum_macros = "0.27"
 async-std = "1.13.1"
 
 [dev-dependencies]
-nonstd = { git = "https://github.com/mrdkprj/nonstd.git", rev="0ea291238e1066bbbf4e2eb01f2539a2975b886d" }
+zouni = "0.1.0"
 icc-profile = "0.0.2"
 rexif = "0.7.5"
 

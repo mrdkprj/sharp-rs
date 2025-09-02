@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(unused_imports)]
-use nonstd::fs;
 use sharp::{operation::FlattenOptions, resize::ResizeOptions, Colour, Sharp};
 use std::path::{Path, PathBuf};
+use zouni::fs;
 
 use crate::fixtures;
 pub mod maxcolor;
