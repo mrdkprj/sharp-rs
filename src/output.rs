@@ -13,9 +13,10 @@ use rs_vips::{
         ForeignTiffCompression, ForeignTiffPredictor, ForeignTiffResunit, ForeignWebpPreset,
     },
 };
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputInfo {
     pub format: String,
     pub width: i32,
